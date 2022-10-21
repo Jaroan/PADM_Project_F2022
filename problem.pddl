@@ -2,7 +2,8 @@
 	(:domain kitchen-robot)
 	(:objects
     	gripper - robot
-    	sugarbox - cupcake
+    	sugarbox - locatable
+        spambox - locatable
     	stovetop - location
     	countertop - location
 	)
