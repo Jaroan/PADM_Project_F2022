@@ -8,12 +8,11 @@
     	countertop - location
 	)
 (:init
+    (on countertop gripper)
 	(on sugarbox stovetop)
 	(gripper-empty)
-	(path stovetop countertop)
 	(on spambox countertop)
     (not(drawer-open))
-    (path countertop drawer)
 )
 
 
