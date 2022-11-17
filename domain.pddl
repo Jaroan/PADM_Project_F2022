@@ -1,5 +1,5 @@
 (define (domain kitchen-robot)
-(:requirements :typing :equality :fluents)
+(:requirements :typing :strips :negative-preconditions)
 
   (:types         
     location locatable - object
@@ -13,7 +13,7 @@
     (gripper-holding ?object - locatable)
     (on ?location - location ?object - locatable)     
     (drawer-open)
-    (path ?to - location ?from - location)
+    ;(path ?to - location ?from - location)
   )
   
   (:action pickupTop
