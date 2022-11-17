@@ -1,26 +1,30 @@
 (define (problem sugarmove-spammove)
 	(:domain kitchen-robot)
 	(:objects
-    	gripper - robot
-    	sugarbox - locatable
-        spambox - locatable
-    	stovetop - location
-    	countertop - location
+        ;locatables
+        arm - robot
+    	spam - food
+        sugar - food
+
+        ;locations
+        counter - top
+        stove - top
+        drawer - drawer
 	)
-(:init
-    (on countertop gripper)
-	(on sugarbox stovetop)
+    (:init
+	(on arm counter)
+	(on spam counter)
+    (on sugar stove)
 	(gripper-empty)
-	(on spambox countertop)
-    (not(drawer-open))
+    (drawer-closed)
 )
 
-
-(:goal 
+    (:goal 
     (and
-	    (on sugarbox countertop)
-        (on spambox drawer)
-        (not (drawer-open))
+        (on spam drawer)
+        (on sugar counter)
+        (drawer-closed)
     )
 )
+
 )
