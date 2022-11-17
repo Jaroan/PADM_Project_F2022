@@ -1,97 +1,143 @@
 (define (domain kitchen-robot)
-(:requirements :typing :strips :negative-preconditions)
+(:requirements :typing :negative-preconditions) 
 
-  (:types         
+(:types         
     location locatable - object
-    stovetop countertop drawer - location
-    gripper sugarbox spambox - locatable
-    robot - gripper
-  )
+	bot food - locatable
+    robot - bot
+    drawer - location
+    top - location
+)
 
-  (:predicates
+(:predicates
+	(on ?obj - locatable ?loc - location)
+	(holding ?arm - locatable ?food - locatable)
     (gripper-empty)
-    (gripper-holding ?object - locatable)
-    (on ?location - location ?object - locatable)     
-    (drawer-open)
-    ;(path ?to - location ?from - location)
-  )
-  
-  (:action pickupTop
-    :parameters (?food - locatable ?location - location ?gripper - robot)
-    :precondition (and 
-    (gripper-empty)
-    (on ?location ?gripper)
-    (on ?location ?food))
-    :effect (and 
-    not(gripper-empty)
-    (gripper-holding ?food))
-  )
-  
-  (:action pickupDrawer
-    :parameters (?food - locatable ?drawer - location ?gripper - robot)
-    :precondition (and 
-    (drawer-open)
-    (gripper-empty)
-    (on ?drawer ?gripper)
-    (on ?drawer ?food))
-    :effect (and 
-    not(gripper-empty)
-    (gripper-holding ?food))
-  )
-  
-  (:action dropTop
-    :parameters (?food - locatable ?location - location ?gripper - robot)
-    :precondition (and 
-    (gripper-holding ?food)
-    (on ?location ?gripper)
-    )
-    :effect (and 
-    (gripper-empty)
-    not(gripper-holding ?food)
-    (on ?location ?food))
-  )
+    (drawer-closed)
+)
 
-  (:action dropDrawer
-    :parameters (?food - locatable ?drawer - location ?gripper - robot)
-    :precondition (and 
-    (gripper-holding ?food)
-    (on ?drawer ?gripper)
-    (drawer-open)
+(:action pickupTop
+  :parameters
+   (?arm - bot
+    ?food - locatable
+    ?loc - top)
+  :precondition
+   (and 
+      (on ?arm ?loc) 
+      (on ?food ?loc) 
+      (gripper-empty)
     )
-    :effect (and 
-    (gripper-empty)
-    not(gripper-holding ?food)
-    (on ?drawer ?food))
-  )
+  :effect
+   (and 
+      (not (on ?food ?loc))
+      (holding ?arm ?food)
+      (not (gripper-empty))
+   )
+)
 
-  (:action openDrawer
-    :parameters (?drawer - location ?gripper - robot)
-    :precondition (and 
-    not(drawer-open)
-    (on ?drawer ?gripper)
+(:action dropTop
+  :parameters
+   (?arm - bot
+    ?food - locatable
+    ?loc - top)
+  :precondition
+   (and 
+      (on ?arm ?loc)
+      (holding ?arm ?food)
     )
-    :effect (and 
-    (drawer-open))
-  )
+  :effect
+   (and 
+      (on ?food ?loc)
+      (gripper-empty)
+      (not (holding ?arm ?food))
+   )
+)
 
-  (:action closeDrawer
-    :parameters (?drawer - location ?gripper - robot)
-    :precondition (and 
-    (drawer-open)
-    (on ?drawer ?gripper)
+(:action pickupDrawer
+  :parameters
+   (?arm - bot
+    ?food - locatable
+    ?loc - drawer)
+  :precondition
+   (and 
+      (on ?arm ?loc) 
+      (on ?food ?loc) 
+      (gripper-empty)
+      (not(drawer-closed))
     )
-    :effect (and 
-    not(drawer-open))
-  )
+  :effect
+   (and 
+      (not (on ?food ?loc))
+      (holding ?arm ?food)
+      (not (gripper-empty))
+   )
+)
 
-  (:action move
-    :parameters (?gripper - robot ?to - location ?from - location)
-    :precondition (and 
-    (on ?from ?gripper)
-    (path ?to ?from)
+(:action dropDrawer
+  :parameters
+   (?arm - bot
+    ?food - locatable
+    ?loc - drawer)
+  :precondition
+   (and 
+      (on ?arm ?loc)
+      (holding ?arm ?food)
+      (not(drawer-closed))
     )
-    :effect (and 
-    not(on ?from ?gripper)
-    (on ?to ?gripper))
-  ) 
+  :effect
+   (and 
+      (on ?food ?loc)
+      (gripper-empty)
+      (not (holding ?arm ?food))
+   )
+)
+
+(:action openDrawer
+  :parameters
+   (?arm - bot
+    ?loc - drawer)
+  :precondition
+   (and 
+      (on ?arm ?loc)
+      (gripper-empty)
+      (drawer-closed)
+    )
+  :effect
+   (and 
+      (not(drawer-closed))
+   )
+)
+
+(:action closeDrawer
+  :parameters
+   (?arm - bot
+    ?loc - drawer)
+  :precondition
+   (and 
+      (on ?arm ?loc)
+      (gripper-empty)
+      (not(drawer-closed))
+    )
+  :effect
+   (and 
+      (drawer-closed)
+   )
+)
+
+(:action move
+  :parameters
+   (?arm - bot
+    ?from - location
+    ?to - location)
+  :precondition
+   ( and
+    (on ?arm ?from) 
+   )
+  :effect
+   (and 
+    (not (on ?arm ?from))
+    (on ?arm ?to)
+   )
+)
+
 )
