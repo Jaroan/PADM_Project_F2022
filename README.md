@@ -2,6 +2,8 @@
 
 ## Section 1: Activity Planning
 
+*need to update this section with new domain+planner*
+
 #### <b> Assumptions Made </b>
 1. An item can only be in one location at a time
 2. Every item location is known
@@ -12,7 +14,7 @@
  -->
 
 
- We design our `object` type to be made up of a `location` and a `locatable`. From there, we break down our `locations` to be `stovetop`, `countertop ` and `drawer`. Similarly, our `locatables` are `sugarbox, spambox` and `gripper`. Because the `gripper` is a special `locatable` that will be frequently queried, we use `robot` to further classify it. This is shown in Figure 1. 
+ We design our `object` type to be made up of a `location` and a `locatable`. From there, we break down our `locations` to be `top`,  and `drawer`. Similarly, our `locatables` are `sugarbox, spambox` and `gripper`. Because the `gripper` is a special `locatable` that will be frequently queried, we use `robot` to further classify it. This is shown in Figure 1. 
 
 In our domain file, we have 5 predicates
 
@@ -30,7 +32,7 @@ In our domain file, we have 5 predicates
 
 
 #### <b> Challenges </b>
-- still working on the planner 🤪
+- understanding typing
 
 ## Section 2: Sample Based Motion Planning
 
