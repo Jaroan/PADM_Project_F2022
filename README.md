@@ -36,6 +36,9 @@ In our domain file, we have 5 predicates
 
 ## Section 2: Sample Based Motion Planning
 
+The planning algorithm choosen was RRT on the Franka Panda robot. 
+
+
 - Qualitatively mention your assumptions that you made about the environment, state space, and start and goal positions
 - Explain the files and the motion planners you implemented
 - Explain how you integrated the activity plan with the motion plan

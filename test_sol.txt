@@ -1,0 +1,195 @@
+['define',
+ ['domain', 'kitchen-robot'],
+ [':requirements', ':typing', ':negative-preconditions'],
+ [':types',
+  'location',
+  'locatable',
+  '-',
+  'object',
+  'bot',
+  'food',
+  '-',
+  'locatable',
+  'robot',
+  '-',
+  'bot',
+  'drawer',
+  '-',
+  'location',
+  'top',
+  '-',
+  'location'],
+ [':predicates',
+  ['on', '?obj', '-', 'locatable', '?loc', '-', 'location'],
+  ['holding', '?arm', '-', 'locatable', '?food', '-', 'locatable'],
+  ['gripper-empty'],
+  ['drawer-closed']],
+ [':action',
+  'pickuptop',
+  ':parameters',
+  ['?arm', '-', 'bot', '?food', '-', 'locatable', '?loc', '-', 'top'],
+  ':precondition',
+  ['and', ['on', '?arm', '?loc'], ['on', '?food', '?loc'], ['gripper-empty']],
+  ':effect',
+  ['and',
+   ['not', ['on', '?food', '?loc']],
+   ['holding', '?arm', '?food'],
+   ['not', ['gripper-empty']]]],
+ [':action',
+  'droptop',
+  ':parameters',
+  ['?arm', '-', 'bot', '?food', '-', 'locatable', '?loc', '-', 'top'],
+  ':precondition',
+  ['and', ['on', '?arm', '?loc'], ['holding', '?arm', '?food']],
+  ':effect',
+  ['and',
+   ['on', '?food', '?loc'],
+   ['gripper-empty'],
+   ['not', ['holding', '?arm', '?food']]]],
+ [':action',
+  'pickupdrawer',
+  ':parameters',
+  ['?arm', '-', 'bot', '?food', '-', 'locatable', '?loc', '-', 'drawer'],
+  ':precondition',
+  ['and',
+   ['on', '?arm', '?loc'],
+   ['on', '?food', '?loc'],
+   ['gripper-empty'],
+   ['not', ['drawer-closed']]],
+  ':effect',
+  ['and',
+   ['not', ['on', '?food', '?loc']],
+   ['holding', '?arm', '?food'],
+   ['not', ['gripper-empty']]]],
+ [':action',
+  'dropdrawer',
+  ':parameters',
+  ['?arm', '-', 'bot', '?food', '-', 'locatable', '?loc', '-', 'drawer'],
+  ':precondition',
+  ['and',
+   ['on', '?arm', '?loc'],
+   ['holding', '?arm', '?food'],
+   ['not', ['drawer-closed']]],
+  ':effect',
+  ['and',
+   ['on', '?food', '?loc'],
+   ['gripper-empty'],
+   ['not', ['holding', '?arm', '?food']]]],
+ [':action',
+  'opendrawer',
+  ':parameters',
+  ['?arm', '-', 'bot', '?loc', '-', 'drawer'],
+  ':precondition',
+  ['and', ['on', '?arm', '?loc'], ['gripper-empty'], ['drawer-closed']],
+  ':effect',
+  ['and', ['not', ['drawer-closed']]]],
+ [':action',
+  'closedrawer',
+  ':parameters',
+  ['?arm', '-', 'bot', '?loc', '-', 'drawer'],
+  ':precondition',
+  ['and',
+   ['on', '?arm', '?loc'],
+   ['gripper-empty'],
+   ['not', ['drawer-closed']]],
+  ':effect',
+  ['and', ['drawer-closed']]],
+ [':action',
+  'move',
+  ':parameters',
+  ['?arm', '-', 'bot', '?from', '-', 'location', '?to', '-', 'location'],
+  ':precondition',
+  ['and', ['on', '?arm', '?from']],
+  ':effect',
+  ['and', ['not', ['on', '?arm', '?from']], ['on', '?arm', '?to']]]]
+----------------------------
+['define',
+ ['problem', 'sugarmove-spammove'],
+ [':domain', 'kitchen-robot'],
+ [':objects',
+  'arm',
+  '-',
+  'robot',
+  'spam',
+  '-',
+  'food',
+  'sugar',
+  '-',
+  'food',
+  'counter',
+  '-',
+  'top',
+  'stove',
+  '-',
+  'top',
+  'drawer',
+  '-',
+  'drawer'],
+ [':init',
+  ['on', 'arm', 'counter'],
+  ['on', 'spam', 'counter'],
+  ['on', 'sugar', 'stove'],
+  ['gripper-empty'],
+  ['drawer-closed']],
+ [':goal',
+  ['and',
+   ['on', 'spam', 'drawer'],
+   ['on', 'sugar', 'counter'],
+   ['drawer-closed']]]]
+----------------------------
+Domain name: kitchen-robot
+action: pickuptop
+  parameters: [['?arm', 'bot'], ['?food', 'locatable'], ['?loc', 'top']]
+  positive_preconditions: [['on', '?food', '?loc'], ['on', '?arm', '?loc'], ['gripper-empty']]
+  negative_preconditions: []
+  add_effects: [['holding', '?arm', '?food']]
+  del_effects: [['on', '?food', '?loc'], ['gripper-empty']]
+
+action: droptop
+  parameters: [['?arm', 'bot'], ['?food', 'locatable'], ['?loc', 'top']]
+  positive_preconditions: [['on', '?arm', '?loc'], ['holding', '?arm', '?food']]
+  negative_preconditions: []
+  add_effects: [['on', '?food', '?loc'], ['gripper-empty']]
+  del_effects: [['holding', '?arm', '?food']]
+
+action: pickupdrawer
+  parameters: [['?arm', 'bot'], ['?food', 'locatable'], ['?loc', 'drawer']]
+  positive_preconditions: [['on', '?food', '?loc'], ['on', '?arm', '?loc'], ['gripper-empty']]
+  negative_preconditions: [['drawer-closed']]
+  add_effects: [['holding', '?arm', '?food']]
+  del_effects: [['on', '?food', '?loc'], ['gripper-empty']]
+
+action: dropdrawer
+  parameters: [['?arm', 'bot'], ['?food', 'locatable'], ['?loc', 'drawer']]
+  positive_preconditions: [['on', '?arm', '?loc'], ['holding', '?arm', '?food']]
+  negative_preconditions: [['drawer-closed']]
+  add_effects: [['on', '?food', '?loc'], ['gripper-empty']]
+  del_effects: [['holding', '?arm', '?food']]
+
+action: opendrawer
+  parameters: [['?arm', 'bot'], ['?loc', 'drawer']]
+  positive_preconditions: [['gripper-empty'], ['on', '?arm', '?loc'], ['drawer-closed']]
+  negative_preconditions: []
+  add_effects: []
+  del_effects: [['drawer-closed']]
+
+action: closedrawer
+  parameters: [['?arm', 'bot'], ['?loc', 'drawer']]
+  positive_preconditions: [['gripper-empty'], ['on', '?arm', '?loc']]
+  negative_preconditions: [['drawer-closed']]
+  add_effects: [['drawer-closed']]
+  del_effects: []
+
+action: move
+  parameters: [['?arm', 'bot'], ['?from', 'location'], ['?to', 'location']]
+  positive_preconditions: [['on', '?arm', '?from']]
+  negative_preconditions: []
+  add_effects: [['on', '?arm', '?to']]
+  del_effects: [['on', '?arm', '?from']]
+
+----------------------------
+Problem name: sugarmove-spammove
+Objects: {'robot': ['arm'], 'food': ['spam', 'sugar'], 'top': ['counter', 'stove'], 'drawer': ['drawer']}
+State: [['drawer-closed'], ['on', 'sugar', 'stove'], ['on', 'spam', 'counter'], ['on', 'arm', 'counter'], ['gripper-empty']]
+Positive goals: [['on', 'spam', 'drawer'], ['on', 'sugar', 'counter'], ['drawer-closed']]
+Negative goals: []
