@@ -91,38 +91,77 @@ def main():
 	print('Kitchen Joints', [get_joint_name(world.kitchen, kitchen) for kitchen in world.kitchen_joints]) 
 	# define active DoFs
 	joint_names =('panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 'panda_joint5', 'panda_joint6', 'panda_joint7')
-	joint_idx = [joint_from_name(get_joint_name(world.robot, joint)) for joint in joint_names]
+	# joint_names = (1,2,3,4,5,6,7)
+	joint_idx = [joint_from_name(world.robot, joint) for joint in joint_names]
 
 	# parse active DoF joint limits
-	joint_limits = {joint_names[i] : (get_joint_info(robots[world.robot], joint_idx[i]).jointLowerLimit, get_joint_info(robots[world.robot], joint_idx[i]).jointUpperLimit) for i in range(len(joint_idx))}
+	joint_limits = {joint_names[i] : (get_joint_info(world.robot, joint_idx[i]).jointLowerLimit, get_joint_info(world.robot, joint_idx[i]).jointUpperLimit) for i in range(len(joint_idx))}
+
+	collision_fn = get_collision_fn_franka(world.robot, joint_idx, list(obstacles.values()))
+	# Example use of collision checking
+	# print("Robot colliding? ", collision_fn((0.5, 1.19, -1.548, 1.557, -1.32, -0.1928)))
+
+	start_config = tuple(get_joint_positions(robots['pr2'], joint_idx))
+	goal_config = (0.5, 0.33, -1.548, 1.557, -1.32, -0.1928)
+	path = []
+
+	### 
+	start_time = time.time()
 
 
-	with LockRenderer():
-		with HideOutput(True):
-			robot = load_pybullet(FRANKA_URDF, fixed_base=True)
-			assign_link_colors(robot, max_colors=3, s=0.5, v=1.)
-			#set_all_color(robot, GREEN)
-	obstacles = [plane] # TODO: collisions with the ground
+	print("joint limits: ")
+	for i in range(len(joint_limits)):
+		print(joint_limits[joint_names[i]])
+	print(joint_limits)
 
-	dump_body(robot)
-	print('Start?')
-	wait_for_user()
 
-	info = PANDA_INFO
-	tool_link = link_from_name(robot, 'panda_hand')
-	draw_pose(Pose(), parent=robot, parent_link=tool_link)
-	joints = get_movable_joints(robot)
-	print('Joints', [get_joint_name(robot, joint) for joint in joints])
-	check_ik_solver(info)
+    joints_start = [joint_limits[joint_names[i]][0] for i in range(len(joint_limits))]
+    joints_scale = [abs(joint_limits[joint_names[i]][0] - joint_limits[joint_names[i]][1]) for i in range(len(joint_limits))]
+    print("joint start: ",joints_start)
+    print("joint scale: ",joints_scale)
+    # print("joints scale: ",joints_scale)
 
-	sample_fn = get_sample_fn(robot, joints)
+    ###### Modify Parameters ######
+    """
+    Edit the part below
+    """
 
-	print("Going to operate the base without collision checking")
-	for i in range(100):
-		goal_pos = translate_linearly(world, 0.01) # does not do any collision checking!!
-		set_joint_positions(world.robot, world.base_joints, goal_pos)
-		if (i % 30 == 0):
-			wait_for_user()
+    # KEY: node : a tuple, NOT list! 
+    step_size = 0.05 #rad for each joint (revolute)
+    goal_bias_prob = 0.1 # goal_bias: 10%
+    goal_node = goal_config
+    root_parent = (-1,-1,-1,-1,-1,-1)
+    # Total: 6 DOF 
+    K = 3000  # 10000 nodes iter: 81, rrt# 987
+    rrt = [start_config]     # a list of config_nodes
+    parents = {} # a dictionary key: tuple(a config), value: tuple(parent's config)
+    parents[start_config] = root_parent
+
+    # goal_threshold = 0.5
+    goal_threshold = 0.4
+    findpath = False
+
+	# obstacles = [plane] # TODO: collisions with the ground
+
+	# dump_body(robot)
+	# print('Start?')
+	# wait_for_user()
+
+	# info = PANDA_INFO
+	# tool_link = link_from_name(robot, 'panda_hand')
+	# draw_pose(Pose(), parent=robot, parent_link=tool_link)
+	# joints = get_movable_joints(robot)
+	# print('Joints', [get_joint_name(robot, joint) for joint in joints])
+	# check_ik_solver(info)
+
+	# sample_fn = get_sample_fn(robot, joints)
+
+	# print("Going to operate the base without collision checking")
+	# for i in range(100):
+	# 	goal_pos = translate_linearly(world, 0.01) # does not do any collision checking!!
+	# 	set_joint_positions(world.robot, world.base_joints, goal_pos)
+	# 	if (i % 30 == 0):
+	# 		wait_for_user()
 	wait_for_user()
 	world.destroy()
 
