@@ -3215,6 +3215,64 @@ def get_limits_fn(body, joints, custom_limits={}, verbose=False):
         return False
     return limits_fn
 
+def get_collision_fn(body, joints, obstacles=[], attachments=[], self_collisions=True, disabled_collisions=set(),
+                     custom_limits={}, use_aabb=False, cache=False, max_distance=MAX_DISTANCE, **kwargs):
+    # TODO: convert most of these to keyword arguments
+    check_link_pairs = get_self_link_pairs(body, joints, disabled_collisions) if self_collisions else []
+    moving_links = frozenset(link for link in get_moving_links(body, joints)
+                             if can_collide(body, link)) # TODO: propagate elsewhere
+    attached_bodies = [attachment.child for attachment in attachments]
+    moving_bodies = [CollisionPair(body, moving_links)] + list(map(parse_body, attached_bodies))
+    #moving_bodies = list(flatten(flatten_links(*pair) for pair in moving_bodies)) # Introduces overhead
+    #moving_bodies = [body] + [attachment.child for attachment in attachments]
+    get_obstacle_aabb = cached_fn(get_buffered_aabb, cache=cache, max_distance=max_distance/2., **kwargs)
+    limits_fn = get_limits_fn(body, joints, custom_limits=custom_limits)
+    # TODO: sort bodies by bounding box size
+
+    def collision_fn(q, verbose=False):
+        if limits_fn(q):
+            print('limit being violated :(')
+            return True
+        set_joint_positions(body, joints, q)
+        for attachment in attachments:
+            attachment.assign()
+        #wait_for_duration(1e-2)
+        get_moving_aabb = cached_fn(get_buffered_aabb, cache=True, max_distance=max_distance/2., **kwargs)
+
+        for link1, link2 in check_link_pairs:
+            # Self-collisions should not have the max_distance parameter
+            # TODO: self-collisions between body and attached_bodies (except for the link adjacent to the robot)
+            if (not use_aabb or aabb_overlap(get_moving_aabb(body), get_moving_aabb(body))) and \
+                    pairwise_link_collision(body, link1, body, link2): #, **kwargs):
+                #print(get_body_name(body), get_link_name(body, link1), get_link_name(body, link2))
+                if verbose: print(body, link1, body, link2)
+                print('something else')
+                return True
+
+        # #step_simulation()
+        # #update_scene()
+        # for body1 in moving_bodies:
+        #     overlapping_pairs = [(body2, link2) for body2, link2 in get_bodies_in_region(get_moving_aabb(body1))
+        #                          if body2 in obstacles]
+        #     overlapping_bodies = {body2 for body2, _ in overlapping_pairs}
+        #     for body2 in overlapping_bodies:
+        #         if pairwise_collision(body1, body2, **kwargs):
+        #             #print(get_body_name(body1), get_body_name(body2))
+        #             if verbose: print(body1, body2)
+        #             return True
+        # return False
+
+        for body1, body2 in product(moving_bodies, obstacles):
+            if (not use_aabb or aabb_overlap(get_moving_aabb(body1), get_obstacle_aabb(body2))) \
+                    and pairwise_collision(body1, body2, **kwargs):
+                #print(get_body_name(body1), get_body_name(body2))
+                if verbose: print(body1, body2)
+                print('body 1: ', body1,'body 2: ', body2)
+                return True
+        return False
+        
+    return collision_fn
+
 
 # #####################################
 
@@ -3739,69 +3797,17 @@ def read_pcd_file(path):
 
 # TODO: factor out things that don't depend on pybullet
 
-#########################################################
-
-def get_collision_fn(body, joints, obstacles=[], attachments=[], self_collisions=True, disabled_collisions=set(),
-                     custom_limits={}, use_aabb=False, cache=False, max_distance=MAX_DISTANCE, **kwargs):
-    # TODO: convert most of these to keyword arguments
-    check_link_pairs = get_self_link_pairs(body, joints, disabled_collisions) if self_collisions else []
-    moving_links = frozenset(link for link in get_moving_links(body, joints)
-                             if can_collide(body, link)) # TODO: propagate elsewhere
-    attached_bodies = [attachment.child for attachment in attachments]
-    moving_bodies = [CollisionPair(body, moving_links)] + list(map(parse_body, attached_bodies))
-    #moving_bodies = list(flatten(flatten_links(*pair) for pair in moving_bodies)) # Introduces overhead
-    #moving_bodies = [body] + [attachment.child for attachment in attachments]
-    get_obstacle_aabb = cached_fn(get_buffered_aabb, cache=cache, max_distance=max_distance/2., **kwargs)
-    limits_fn = get_limits_fn(body, joints, custom_limits=custom_limits)
-    # TODO: sort bodies by bounding box size
-
-    def collision_fn(q, verbose=False):
-        #if limits_fn(q):
-        #    return True
-        set_joint_positions(body, joints, q)
-        for attachment in attachments:
-            attachment.assign()
-        #wait_for_duration(1e-2)
-        get_moving_aabb = cached_fn(get_buffered_aabb, cache=True, max_distance=max_distance/2., **kwargs)
-
-        for link1, link2 in check_link_pairs:
-            # Self-collisions should not have the max_distance parameter
-            # TODO: self-collisions between body and attached_bodies (except for the link adjacent to the robot)
-            if (not use_aabb or aabb_overlap(get_moving_aabb(body), get_moving_aabb(body))) and \
-                    pairwise_link_collision(body, link1, body, link2): #, **kwargs):
-                #print(get_body_name(body), get_link_name(body, link1), get_link_name(body, link2))
-                if verbose: print(body, link1, body, link2)
-                return True
-
-        # #step_simulation()
-        # #update_scene()
-        # for body1 in moving_bodies:
-        #     overlapping_pairs = [(body2, link2) for body2, link2 in get_bodies_in_region(get_moving_aabb(body1))
-        #                          if body2 in obstacles]
-        #     overlapping_bodies = {body2 for body2, _ in overlapping_pairs}
-        #     for body2 in overlapping_bodies:
-        #         if pairwise_collision(body1, body2, **kwargs):
-        #             #print(get_body_name(body1), get_body_name(body2))
-        #             if verbose: print(body1, body2)
-        #             return True
-        # return False
-
-        for body1, body2 in product(moving_bodies, obstacles):
-            if (not use_aabb or aabb_overlap(get_moving_aabb(body1), get_obstacle_aabb(body2))) \
-                    and pairwise_collision(body1, body2, **kwargs):
-                #print(get_body_name(body1), get_body_name(body2))
-                if verbose: print(body1, body2)
-                return True
-        return False
-    return collision_fn
-
-def get_disabled_collisions(pr2): 
+############################################
+NEVER_COLLISIONS = []
+def get_disabled_collisions(pr2):
     #disabled_names = PR2_ADJACENT_LINKS
     #disabled_names = PR2_DISABLED_COLLISIONS
-    disabled_names = []
-    #disabled_names = PR2_DISABLED_COLLISIONS + 
+    disabled_names = NEVER_COLLISIONS
+    #disabled_names = PR2_DISABLED_COLLISIONS + NEVER_COLLISIONS
     link_mapping = {get_link_name(pr2, link): link for link in get_links(pr2)}
-    return []
+    return {(link_mapping[name1], link_mapping[name2])
+            for name1, name2 in disabled_names if (name1 in link_mapping) and (name2 in link_mapping)}
+
 
 def get_collision_fn_franka(robot, joints, obstacles):
     # check robot collision with environment
