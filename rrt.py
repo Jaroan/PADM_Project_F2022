@@ -17,6 +17,8 @@ __import__('padm-project-2022f')
 import sys
 import argparse
 
+from utils import get_collision_fn_franka, get_collision_fn
+
 sys.path.extend(os.path.abspath(os.path.join(os.getcwd(), d)) for d in ['pddlstream', 'ss-pybullet'])
 # from utils import load_env, get_collision_fn_PR2, execute_trajectory, draw_sphere_marker
 from pybullet_tools.utils import connect, disconnect, draw_circle,  get_movable_joint_descendants, wait_for_user, wait_if_gui, joint_from_name, get_joint_positions, set_joint_positions, get_joint_info, get_link_pose, link_from_name
@@ -68,7 +70,7 @@ def main():
 	print('Numpy seed:', get_numpy_seed())
 
 	np.set_printoptions(precision=3, suppress=True)
-	world = World(use_gui=True)
+	world = World(use_gui=False)
 	sugar_box = add_sugar_box(world, idx=0, counter=1, pose2d=(-0.2, 0.65, np.pi / 4))
 	spam_box = add_spam_box(world, idx=1, counter=0, pose2d=(0.2, 1.1, np.pi / 4))
 	wait_for_user()
@@ -91,15 +93,16 @@ def main():
 	print('Kitchen Joints', [get_joint_name(world.kitchen, kitchen) for kitchen in world.kitchen_joints]) 
 	# define active DoFs
 	joint_names =('panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 'panda_joint5', 'panda_joint6', 'panda_joint7')
-	# joint_names = (1,2,3,4,5,6,7)
 	joint_idx = [joint_from_name(world.robot, joint) for joint in joint_names]
+	#print('joint index:', joint_idx)
+
 
 	# parse active DoF joint limits
 	joint_limits = {joint_names[i] : (get_joint_info(world.robot, joint_idx[i]).jointLowerLimit, get_joint_info(world.robot, joint_idx[i]).jointUpperLimit) for i in range(len(joint_idx))}
 
 	collision_fn = get_collision_fn_franka(world.robot, joint_idx, list(obstacles.values()))
 	# Example use of collision checking
-	# print("Robot colliding? ", collision_fn((0.5, 1.19, -1.548, 1.557, -1.32, -0.1928)))
+	print("Robot colliding? ", collision_fn((0.5, 1.19, -1.548, 1.557, -1.32, -0.1928)))
 
 	start_config = tuple(get_joint_positions(robots['pr2'], joint_idx))
 	goal_config = (0.5, 0.33, -1.548, 1.557, -1.32, -0.1928)
@@ -115,31 +118,35 @@ def main():
 	print(joint_limits)
 
 
-    joints_start = [joint_limits[joint_names[i]][0] for i in range(len(joint_limits))]
-    joints_scale = [abs(joint_limits[joint_names[i]][0] - joint_limits[joint_names[i]][1]) for i in range(len(joint_limits))]
-    print("joint start: ",joints_start)
-    print("joint scale: ",joints_scale)
-    # print("joints scale: ",joints_scale)
+	joints_start = [joint_limits[joint_names[i]][0] for i in range(len(joint_limits))]
+	joints_scale = [abs(joint_limits[joint_names[i]][0] - joint_limits[joint_names[i]][1]) for i in range(len(joint_limits))]
+	print("joint start: ",joints_start)
+	print("joint scale: ",joints_scale)
+	# print("joints scale: ",joints_scale)
+
+
+
+
 
     ###### Modify Parameters ######
-    """
+	"""
     Edit the part below
     """
 
     # KEY: node : a tuple, NOT list! 
-    step_size = 0.05 #rad for each joint (revolute)
-    goal_bias_prob = 0.1 # goal_bias: 10%
-    goal_node = goal_config
-    root_parent = (-1,-1,-1,-1,-1,-1)
+	step_size = 0.05 #rad for each joint (revolute)
+	goal_bias_prob = 0.1 # goal_bias: 10%
+	goal_node = goal_config
+	root_parent = (-1,-1,-1,-1,-1,-1)
     # Total: 6 DOF 
-    K = 3000  # 10000 nodes iter: 81, rrt# 987
-    rrt = [start_config]     # a list of config_nodes
-    parents = {} # a dictionary key: tuple(a config), value: tuple(parent's config)
-    parents[start_config] = root_parent
+	K = 3000  # 10000 nodes iter: 81, rrt# 987
+	rrt = [start_config]     # a list of config_nodes
+	parents = {} # a dictionary key: tuple(a config), value: tuple(parent's config)
+	parents[start_config] = root_parent
 
     # goal_threshold = 0.5
-    goal_threshold = 0.4
-    findpath = False
+	goal_threshold = 0.4
+	findpath = False
 
 	# obstacles = [plane] # TODO: collisions with the ground
 
@@ -162,6 +169,9 @@ def main():
 	# 	set_joint_positions(world.robot, world.base_joints, goal_pos)
 	# 	if (i % 30 == 0):
 	# 		wait_for_user()
+
+
+
 	wait_for_user()
 	world.destroy()
 

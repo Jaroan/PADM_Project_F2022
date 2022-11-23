@@ -1,5 +1,8 @@
+import gitmodules # need to pip install
+__import__('ss-pybullet') 
+
 from pybullet_tools.utils import set_joint_positions, \
-    wait_if_gui, wait_for_duration, get_collision_fn
+    wait_if_gui, wait_for_duration
 import pybullet as p
 
 
