@@ -24,7 +24,7 @@ from pybullet_tools.utils import connect, disconnect, draw_circle,  get_movable_
 from utils import  get_collision_fn_franka, execute_trajectory, draw_sphere_marker
 
 
-from pybullet_tools.utils import set_pose, Pose, Point, Euler, multiply, get_pose, get_point, create_box, set_all_static, WorldSaver, create_plane, COLOR_FROM_NAME, stable_z_on_aabb, pairwise_collision, elapsed_time, get_aabb_extent, get_aabb, create_cylinder, set_point, get_function_name, wait_for_user, dump_world, set_random_seed, set_numpy_seed, get_random_seed, get_numpy_seed, set_camera, set_camera_pose, link_from_name, get_movable_joints, get_joint_name
+from pybullet_tools.utils import set_pose, Pose, Point, Euler, multiply, get_pose, get_point, get_links,get_link_name, create_box, set_all_static, WorldSaver, create_plane, COLOR_FROM_NAME, stable_z_on_aabb, pairwise_collision, elapsed_time, get_aabb_extent, get_aabb, create_cylinder, set_point, get_function_name, wait_for_user, dump_world, set_random_seed, set_numpy_seed, get_random_seed, get_numpy_seed, set_camera, set_camera_pose, link_from_name, get_movable_joints, get_joint_name
 from pybullet_tools.utils import CIRCULAR_LIMITS, get_custom_limits, set_joint_positions, interval_generator, get_link_pose, interpolate_poses
 
 from pybullet_tools.ikfast.franka_panda.ik import PANDA_INFO, FRANKA_URDF
@@ -64,124 +64,139 @@ def get_sample_fn(body, joints, custom_limits={}, **kwargs):
 	return fn
 
 
-def collision(robot_config):
-	return collision_fn(robot_config)
+# def collision(robot_config):
+# 	return collision_fn(robot_config)
 
-def distance(n1, n2):
-	dist = 0
-	weights = [0.1, 2.5, 0.6, 0.4, 0.3, 0.1]
-	for i in range(len(joint_limits)):
-		dist += abs( n1[i] - n2[i])*weights[i]
-	return dist # Sum of angle error TODO: Distance Metrics! 6DOF
 
-def sample_node(goal_node, goal_bias_prob):
-	# r = rd.random() # float [0.0, 1.0)
-	r = np.random.random(1)
-	if r <= goal_bias_prob:
-		return goal_node 
-	else:
-		random_config = []
-		rand_angles = np.random.rand(6)
-		for i in range(len(joint_limits)):
-			# random_angle = rd.random() # TODO: uniform random
-			random_config.append(joints_start[i] + rand_angles[i] * joints_scale[i])      
-		
-		return tuple(random_config)
 
-def find_nearest_neighbor(rand_node):
-	distances = []
-	for node in rrt:
-		distances.append(distance(node, rand_node))
-	min_index = np.argmin(distances)
-	return rrt[min_index]
+class rrt_helpers:
 
-def direction(config1, config2):
-	# return the direction of each 6 DOF joint (a list)
-	dirs = []
-	for i in range(len(joint_limits)):
-		if config1[i] > config2[i]:
-			dirs.append(-1) # clockwise
-		elif config1[i] <= config2[i]:
-			dirs.append(+1) # counter-clockwise
-		# else:
-			# dirs.append(0)
-	return 
+	def __init__(self, joint_number, start_config):
+		self.joints = joint_number
+		self.rrt = [start_config]
+		self.parents = {} # a dictionary key: tuple(a config), value: tuple(parent's config)
 
-def rrt_connect(near_node, rand_node, step_size, curmincost):
-	dirs = direction(near_node,rand_node)
+	def find_nearest_neighbor(self,rand_node):
+		distances = []
+		for node in self.rrt:
+			distances.append(self.distance(node, rand_node))
+		min_index = np.argmin(distances)
+		return self.rrt[min_index]
 
-	canbreak = True # assume go to rand and can break!
-	new_node = [0, 0, 0, 0, 0, 0]
-	for i in range(len(joint_limits)):
-		if abs(rand_node[i] - near_node[i]) <= step_size:
-			new_node[i] = rand_node[i]
+	def direction(self,config1, config2):
+		# return the direction of each 7 DOF joint (a list)
+		print("configs", config1, "2", config2)
+		dirs = []
+		for i in range(self.joints):
+			if config1[i] > config2[i]:
+				# print("clockwise")
+				dirs.append(-1) # clockwise
+			elif config1[i] <= config2[i]:
+				# print("anticlock")
+				dirs.append(+1) # counter-clockwise
+			# else:
+				# print("none")
+				# dirs.append(0)
+		return dirs
+
+
+	def distance(self,n1, n2):
+		print("n1", n1, "n2", n2,"en(joint_limits)",self.joints)
+		dist = 0
+		weights = [0.1, 2.5, 0.6, 0.4, 0.3, 0.1, 1.0]
+		for i in range(self.joints):
+			dist += abs( n1[i] - n2[i])*weights[i]
+		return dist # Sum of angle error TODO: Distance Metrics! 6DOF
+
+
+	def sample_node(self,goal_node, goal_bias_prob, joints_start, joints_scale):
+		# r = rd.random() # float [0.0, 1.0)
+		r = np.random.random(1)
+		if r <= goal_bias_prob:
+			return goal_node 
 		else:
-			new_node[i] = near_node[i] + dirs[i]*step_size
-			canbreak = False
-	if(canbreak):
-		if distance(goal_node, new_node) < curmincost:
-			curmincost = distance(goal_node, new_node)
-			print("update cur min cost: ",curmincost)
-		rrt.append(rand_node)
-		parents[rand_node] = near_node
-		return rrt[-1], curmincost
-
-	while not collision(new_node) and in_limit(new_node) and not canbreak:
-		if distance(goal_node, new_node) < curmincost:
-			curmincost = distance(goal_node, new_node)
-			print("update cur min cost: ",curmincost)
-
-		rrt.append(tuple(new_node))
-		parents[tuple(new_node)] = tuple(near_node)
-		near_node = tuple(new_node) # update parent
-		
-		canbreak = True
-		for i in range(len(joint_limits)):
+			random_config = []
+			rand_angles = np.random.rand(self.joints)
+			for i in range(self.joints):
+				# random_angle = rd.random() # TODO: uniform random
+				random_config.append(joints_start[i] + rand_angles[i] * joints_scale[i])      
+			
+			return tuple(random_config)
+	def rrt_connect(self,near_node, rand_node, step_size, curmincost):
+		dirs = self.direction(near_node,rand_node)
+		print("near_node",near_node,"dirs", dirs)
+		canbreak = True # assume go to rand and can break!
+		new_node = [0, 0, 0, 0, 0, 0,0]
+		for i in range(self.joints):
 			if abs(rand_node[i] - near_node[i]) <= step_size:
 				new_node[i] = rand_node[i]
-				# print("joint ",i," reach rand_node")        
 			else:
 				new_node[i] = near_node[i] + dirs[i]*step_size
 				canbreak = False
+		if(canbreak):
+			if self.distance(goal_node, new_node) < curmincost:
+				curmincost = self.distance(goal_node, new_node)
+				print("update cur min cost: ",curmincost)
+			self.rrt.append(rand_node)
+			self.parents[rand_node] = near_node
+			return self.rrt[-1], curmincost
 
-		if canbreak:
-			rrt.append(tuple(new_node))
-			parents[tuple(new_node)] = near_node
-			break
+		while not collision(new_node) and in_limit(new_node) and not canbreak:
+			if self.distance(goal_node, new_node) < curmincost:
+				curmincost = self.distance(goal_node, new_node)
+				print("update cur min cost: ",curmincost)
 
-	return rrt[-1], curmincost
+			self.rrt.append(tuple(new_node))
+			self.parents[tuple(new_node)] = tuple(near_node)
+			near_node = tuple(new_node) # update parent
+			
+			canbreak = True
+			for i in range(self.joints):
+				if abs(rand_node[i] - near_node[i]) <= step_size:
+					new_node[i] = rand_node[i]
+					# print("joint ",i," reach rand_node")        
+				else:
+					new_node[i] = near_node[i] + dirs[i]*step_size
+					canbreak = False
 
+			if canbreak:
+				self.rrt.append(tuple(new_node))
+				self.parents[tuple(new_node)] = near_node
+				break
 
-def step(near_node, rand_node, step_size):
-	dirs = direction(near_node, rand_node)
-	new_node = tuple(near_node[i] + dirs[i]*step_size for i in range(len(joint_limits))) # stear ONE STEP from near to rand 'direction'!
-	return new_node
-
-
-
-def reach_goal(goal_node, node, goal_threshold):
-	# print("Distance from cur pose to goal config: ",distance(goal_node, node))
-	return distance(goal_node, node) <= goal_threshold
-
-def extract_path(parents, node, root_parent, debug=False):
-	path = []
-	while parents[node]!= root_parent:
-		if debug:
-			print("Node:   ",rounded_tuple(node))
-			print("Parent: ",rounded_tuple(parents[node]))
-		path.append(node)
-		node = parents[node]
-	path.reverse()
-	return path
+		return self.rrt[-1], curmincost
 
 
-def in_limit(config):
-	for i in range(len(joint_limits)):
-		if (config[i] < joint_limits[joint_names[i]][0] or \
-		   config[i] > joint_limits[joint_names[i]][1]) and i != 4: # KEY: joint 4 has no limit!
-		   print("joint ",i," out of bound.",joint_limits[joint_names[i]], " angle: ",config[i])
-		   return False
-	return True
+	def step(self,near_node, rand_node, step_size):
+		dirs = direction(near_node, rand_node)
+		new_node = tuple(near_node[i] + dirs[i]*step_size for i in range(len(joint_limits))) # stear ONE STEP from near to rand 'direction'!
+		return new_node
+
+
+
+	def reach_goal(self,goal_node, node, goal_threshold):
+		# print("Distance from cur pose to goal config: ",distance(goal_node, node))
+		return distance(goal_node, node) <= goal_threshold
+
+	def extract_path(self,parents, node, root_parent, debug=False):
+		path = []
+		while parents[node]!= root_parent:
+			if debug:
+				print("Node:   ",rounded_tuple(node))
+				print("Parent: ",rounded_tuple(parents[node]))
+			path.append(node)
+			node = parents[node]
+		path.reverse()
+		return path
+
+
+	def in_limit(self,config):
+		for i in range(len(joint_limits)):
+			if (config[i] < joint_limits[joint_names[i]][0] or \
+			   config[i] > joint_limits[joint_names[i]][1]) and i != 4: # KEY: joint 4 has no limit!
+			   print("joint ",i," out of bound.",joint_limits[joint_names[i]], " angle: ",config[i])
+			   return False
+		return True
 
 def main():
 	print('Random seed:', get_random_seed())
@@ -216,14 +231,23 @@ def main():
 
 	# parse active DoF joint limits
 	joint_limits = {joint_names[i] : (get_joint_info(world.robot, joint_idx[i]).jointLowerLimit, get_joint_info(world.robot, joint_idx[i]).jointUpperLimit) for i in range(len(joint_idx))}
+	#specifying obstacles!
+	obstacles = get_links(world.kitchen)
+	obstacle_names = [get_link_name(world.kitchen, link) for link in obstacles]
+	print("obs" ,obstacles)
+	print("obstacles are ",obstacle_names)
 
-	collision_fn = get_collision_fn_franka(world.robot, joint_idx, list(obstacles.values()))
+	#test = p.getClosestPoints(joint_idx[0],obstacles[1],1000000)
+	collision_fn = get_collision_fn_franka(world.robot, joint_idx, list(obstacles))
+
+
 	# Example use of collision checking
 	# print("Robot colliding? ", collision_fn((0.5, 1.19, -1.548, 1.557, -1.32, -0.1928)))
 
 	start_config = tuple(get_joint_positions(world.robot, joint_idx))
-	goal_config = (0.5, 0.33, -1.548, 1.557, -1.32, -0.1928)
+	goal_config = (0.5, 0.33, -1.548, 1.557, -1.32, -0.1928, 0)
 	path = []
+	rrt_obj = rrt_helpers(len(joint_limits),start_config)
 
 	### 
 	start_time = time.time()
@@ -241,6 +265,7 @@ def main():
 	print("joint scale: ",joints_scale)
 	# print("joints scale: ",joints_scale)
 
+
 	###### Modify Parameters ######
 	"""
 	Edit the part below
@@ -253,22 +278,22 @@ def main():
 	root_parent = (-1,-1,-1,-1,-1,-1)
 	# Total: 6 DOF 
 	K = 3000  # 10000 nodes iter: 81, rrt# 987
-	rrt = [start_config]     # a list of config_nodes
-	parents = {} # a dictionary key: tuple(a config), value: tuple(parent's config)
-	parents[start_config] = root_parent
+	# rrt = [start_config]     # a list of config_nodes
+	rrt_obj.parents[start_config] = root_parent
 
 	# goal_threshold = 0.5
 	goal_threshold = 0.4
 	findpath = False
 
 
-	curmincost = distance(start_config,goal_config)
+
+	curmincost = rrt_obj.distance(start_config,goal_config)
 
 
 	print("=================================")
 	print("Start config: ",start_config)
 	print("Goal config: ",goal_config)
-	print("Starting Error: ",distance(start_config,goal_config))
+	print("Starting Error: ",rrt_obj.distance(start_config,goal_config))
 	print("RRT algorithm start: ...\n")
 
 	FACTOR = 50
@@ -277,16 +302,16 @@ def main():
 	for i in range(K): # from 0 to K-1
 		if i% FACTOR ==0:
 			print("iter ",i)
-		rand_node = sample_node(goal_node, goal_bias_prob) # (with 0.1 goal bias)
-		nearest_node = find_nearest_neighbor(rand_node)
-		new_node, curmincost = rrt_connect(nearest_node, rand_node, step_size, curmincost)
+		rand_node = rrt_obj.sample_node(goal_node, goal_bias_prob, joints_start, joints_scale) # (with 0.1 goal bias)
+		nearest_node = rrt_obj.find_nearest_neighbor(rand_node)
+		new_node, curmincost = rrt_obj.rrt_connect(nearest_node, rand_node, step_size, curmincost)
 
-		if reach_goal(goal_node, new_node, goal_threshold):
+		if rrt_obj.reach_goal(goal_node, new_node, goal_threshold):
 			findpath = True
 			print("Reach goal! At iter ",i," # nodes in rrt: ", len(rrt))
 			print("Final pose: ",new_node)
 			final_node = new_node
-			path = extract_path(parents, new_node, root_parent)
+			path = extract_path(rrt_obj.parents, new_node, root_parent)
 			break
 
 	if not findpath:
@@ -297,7 +322,6 @@ def main():
 	print("Draw left end-effector position (red sphere):")
 	radius = 0.03
 	color = (1, 0, 0, 1)
-	# obstacles = [plane] # TODO: collisions with the ground
 
 	# dump_body(robot)
 	# print('Start?')
