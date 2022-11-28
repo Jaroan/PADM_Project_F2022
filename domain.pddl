@@ -3,10 +3,11 @@
 
 (:types         
     location locatable - object
-	bot food - locatable
+	  bot food - locatable
     robot - bot
     drawer - location
     top - location
+    init - location
 )
 
 (:predicates
