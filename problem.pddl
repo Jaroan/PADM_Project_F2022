@@ -10,9 +10,10 @@
         counter - top
         stove - top
         drawer - drawer
+        init - init
 	)
     (:init
-	(on arm counter)
+	(on arm init)
 	(on spam counter)
     (on sugar stove)
 	(gripper-empty)
