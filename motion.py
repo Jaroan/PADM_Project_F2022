@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import os, sys, argparse
 import numpy as np
-import pybullet
+import pybullet as p
 
 import gitmodules
 __import__('padm-project-2022f') 
@@ -11,90 +11,100 @@ __import__('padm-project-2022f')
 from planner import Planner
 
 from pybullet_tools.utils import set_pose, Pose, Point, Euler, multiply, get_pose, get_point, create_box, set_all_static, WorldSaver, create_plane, COLOR_FROM_NAME, stable_z_on_aabb, pairwise_collision, elapsed_time, get_aabb_extent, get_aabb, create_cylinder, set_point, get_function_name, wait_for_user, dump_world, set_random_seed, set_numpy_seed, get_random_seed, get_numpy_seed, set_camera, set_camera_pose, link_from_name, get_movable_joints, get_joint_name
-from pybullet_tools.utils import CIRCULAR_LIMITS, get_custom_limits, set_joint_positions, interval_generator, get_link_pose, interpolate_poses
-
-from pybullet_tools.ikfast.franka_panda.ik import PANDA_INFO, FRANKA_URDF
-from pybullet_tools.ikfast.ikfast import get_ik_joints, closest_inverse_kinematics
+from pybullet_tools.utils import CIRCULAR_LIMITS, get_custom_limits, interval_generator, get_link_pose, interpolate_poses
 
 from src.world import World
-from src.utils import JOINT_TEMPLATE, BLOCK_SIZES, BLOCK_COLORS, COUNTERS, \
-    ALL_JOINTS, LEFT_CAMERA, CAMERA_MATRIX, CAMERA_POSES, CAMERAS, compute_surface_aabb, \
-    BLOCK_TEMPLATE, name_from_type, GRASP_TYPES, SIDE_GRASP, joint_from_name, \
-    STOVES, TOP_GRASP, randomize, LEFT_DOOR, point_from_pose, translate_linearly
-
-#create plans
-planner = Planner()
-actions = planner.solve('domain.pddl', 'problem.pddl')
-plan = []
-
-for act in actions:
-    plan.append(act.name + ' ' + ' '.join(act.parameters))
-
-########################################################### useful functions
-
-def get_sample_fn(body, joints, custom_limits={}, **kwargs):
-    lower_limits, upper_limits = get_custom_limits(body, joints, custom_limits, circular_limits=CIRCULAR_LIMITS)
-    generator = interval_generator(lower_limits, upper_limits, **kwargs)
-    def fn():
-        return tuple(next(generator))
-    return fn
-def add_ycb(world, ycb_type, idx=0, counter=0, **kwargs):
-    name = name_from_type(ycb_type, idx)
-    world.add_body(name, color=np.ones(4))
-    pose2d_on_surface(world, name, COUNTERS[counter], **kwargs)
-    return name
-
-UNIT_POSE2D = (0., 0., 0.)
-def pose2d_on_surface(world, entity_name, surface_name, pose2d=UNIT_POSE2D):
-    x, y, yaw = pose2d
-    body = world.get_body(entity_name)
-    surface_aabb = compute_surface_aabb(world, surface_name)
-    z = stable_z_on_aabb(body, surface_aabb)
-    pose = Pose(Point(x, y, z), Euler(yaw=yaw))
-    set_pose(body, pose)
-    return pose
-
-########################################################## test imports
-
-from pybullet_tools.utils import get_joint_position, has_joint, get_joint_velocity, get_full_configuration, get_joint_limits, violates_limit, get_collision_data
 
 
-######################################################### main
-#initialize world
+#my actual imports! 
+from pybullet_tools.utils import get_joint_positions, get_link_name, get_links, get_link_pose, set_joint_positions
+import numpy as np
+
+#get_joint_positions
+
+#start world
 world = World(use_gui=False)
 robot = world.robot
-add_sugar_box = lambda world, **kwargs: add_ycb(world, 'sugar_box', **kwargs)
-add_spam_box = lambda world, **kwargs: add_ycb(world, 'potted_meat_can', **kwargs)
 
-sugar_box = add_sugar_box(world, idx=0, counter=1, pose2d=(-0.2, 0.65, np.pi / 4))
-spam_box = add_spam_box(world, idx=1, counter=0, pose2d=(0.2, 1.1, np.pi / 4))
-world._update_initial()
-
-tool_link = link_from_name(world.robot, 'panda_hand')           #gripper links
-
-kitchen = get_movable_joints(world.kitchen)                     #kitchen joints
-joints = get_movable_joints(world.robot)                        #gripper links
-
-#print('Kitchen Joints', [get_joint_name(world.kitchen, kitchen) for kitchen in world.kitchen_joints])
-#print('Base Joints', [get_joint_name(world.robot, joint) for joint in world.base_joints]) 
-#print('Arm Joints', [get_joint_name(world.robot, joint) for joint in world.arm_joints]) 
-#print('Gripper Joints', [get_joint_name(world.robot, joint) for joint in world.gripper_joints]) 
-
-#pybullet.getOverlappingObjects()
+#base spawn position
+spawn_pos = np.array([.85, .8, np.pi])
+set_joint_positions(world.robot, world.base_joints, spawn_pos)
 
 
-arm_collision = [get_collision_data(robot, base) for base in world.arm_joints] 
+#inverse kinematics help 
+tool_link = link_from_name(world.robot, 'panda_hand')
 
-test = list(world.static_obstacles)
-
+test = p.calculateInverseKinematics(world.arm_joints, 6, [-0.008500000461935997, 1.2109999656677246, -0.6542999744415283])
 print(test)
 
-print(world.all_bodies)
-
-goal_pos = translate_linearly(world, 1)
-set_joint_positions(world.robot, world.base_joints, goal_pos)
+print(get_joint_positions(world.robot, world.base_joints))
+print(get_joint_positions(world.robot, world.arm_joints))
 
 
+#set_joint_positions(world.robot, world.arm_joints, test)
 
 wait_for_user()
-pybullet.disconnect()
+
+def get_config_from_position():
+    
+    return None
+
+def motion_positions():
+    #initialize pose dictionary
+    pose = {'drawer_closed':[-0.008500000461935997, 1.2109999656677246, -0.6542999744415283],
+            'drawer_open':[],
+            'counter':[],
+            'stove':[]
+            }
+    
+    #create and setup plans! 
+    planner = Planner()
+    actions = planner.solve('domain.pddl', 'problem.pddl')
+    plan = []
+    for act in actions:
+        action = [act.name, list(act.parameters)]
+        plan.append(action)
+    
+    ""
+    positions = []
+    visited = []
+
+
+    for i in range(len(plan)):
+        visited.append(plan[i][0])
+        #print(plan[i])
+        if plan[i][0] == 'move':
+            print(plan[i])
+
+            #if open drawer was last on the visited list, then go to open drawer configuration
+                #motion_position('open_drawer')
+            #if close drawer is on the visited list, then go to closer drawer configuration
+            #motion_position('open_drawer')
+            #else go to close drawer configuration
+        else:
+            positions.append(plan[i][0])
+            #figure out how to pickup/drop things lol
+
+        
+    return positions
+
+motion_positions()
+
+'''
+obstacles = get_links(world.kitchen)
+print(len(obstacles))
+obstacle_names = [get_link_name(world.kitchen, link) for link in obstacles]
+
+#'indigo_drawer_handle_bottom'] = 59,
+#'indigo_drawer_handle_top' = 57
+# indigo_drawer_top = 56
+
+#print(obstacle_names)
+
+#wait_for_user()
+
+print(get_link_name(world.kitchen, 56))
+test = link_from_name(world.kitchen, 'indigo_drawer_top')
+print('indigo_drawer_top', test)
+print(get_link_pose(world.kitchen, test))
+'''
