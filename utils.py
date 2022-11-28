@@ -1,6 +1,7 @@
 import gitmodules # need to pip install
 __import__('padm-project-2022f') 
-
+__import__('ss-pybullet') 
+# from pybullet_tools.utils  import get_collision_fn, get_floating_body_collision_fn, expand_links
 from pybullet_tools.utils import set_joint_positions, \
     wait_if_gui, wait_for_duration, get_collision_data,BASE_LINK
 import pybullet as p
@@ -8,9 +9,9 @@ import pybullet as p
 
 def get_collision_fn_franka(robot, joints, obstacles):
     # check robot collision with environment
-    return get_collision_data(robot, joints, obstacles=obstacles, attachments=[], \
-        self_collisions=True)
-
+    # return get_collision_fn(robot, joints, obstacles=obstacles, attachments=[], \
+    #     self_collisions=True)
+    return get_collision_data(robot, joints)
 
 def execute_trajectory(robot, joints, path, sleep=None):
     # Move the robot according to a given path
