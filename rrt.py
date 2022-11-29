@@ -280,8 +280,12 @@ def main():
 	#specifying obstacles!
 	obstacles = get_links(world.kitchen)
 	obstacle_names = [get_link_name(world.kitchen, link) for link in obstacles]
+
+
+	robotlinks = get_links(world.robot)
+	robotlinks_names = [get_link_name(world.robot, link) for link in robotlinks]
 	# print("obs" ,obstacles)
-	# print("obstacles are ",obstacle_names)
+	print("obstacles are ",robotlinks_names)
 
 	#test = p.getClosestPoints(joint_idx[0],obstacles[1],1000000)
 
@@ -300,6 +304,9 @@ def main():
 		set_joint_positions(world.robot, world.base_joints, goal_pos)
 		if (i % 30 == 0):
 			wait_for_user()
+	#base spawn position
+	spawn_pos = np.array([.85, .8, np.pi])
+	set_joint_positions(world.robot, world.base_joints, spawn_pos)
 
 	path = []
 	rrt_obj = rrt_helpers(len(joint_limits),start_config, joint_limits, joint_names)
@@ -372,7 +379,7 @@ def main():
 			print("Reach goal! At iter ",i," # nodes in rrt: ", len(rrt_obj.rrt))
 			print("Final pose: ",new_node)
 			final_node = new_node
-			path = extract_path(rrt_obj.parents, new_node, root_parent)
+			path = rrt_obj.extract_path(rrt_obj.parents, new_node, root_parent)
 			break
 
 	if not findpath:
@@ -385,7 +392,7 @@ def main():
 	color = (1, 0, 0, 1)
 	for pose in path:
 		set_joint_positions(world.robot, joint_idx, pose)
-		ee_pose = get_link_pose(world.robot, link_from_name(world.robot, 'l_gripper_tool_frame'))
+		ee_pose = get_link_pose(world.robot, link_from_name(world.robot, 'right_gripper'))
 		draw_sphere_marker(ee_pose[0], radius, color)
 
 	print("Planner run time: ", time.time() - start_time)
@@ -424,7 +431,7 @@ def main():
 			return True, new_nodes, parents
 
 		near_node2 = deepcopy(near_node)
-		while not collision(new_node) and in_limit(new_node) and not canbreak:
+		while rrt_obj.no_collision(rrt_obj.current_pos(),new_node) and rrt_obj.in_limit(new_node) and not canbreak:
 			new_nodes.append(tuple(new_node))
 			tmp_parents[tuple(new_node)] = tuple(near_node)
 			if new_node == near_node:
@@ -475,7 +482,7 @@ def main():
 		success, new_nodes, rrt_obj.parents =  try_shortcut(rrt_obj.parents, n1, n2, step_size)
 
 	print("Extracing optimized path...")
-	optimized_path = extract_path(rrt_obj.parents, final_node, root_parent, False) #debug=True)
+	optimized_path = rrt_obj.extract_path(rrt_obj.parents, final_node, root_parent, False) #debug=True)
 
 	print("\n =======================")
 	print("First Path    : ", len(path)," nodes")
@@ -489,7 +496,7 @@ def main():
 	for pose in optimized_path:
 		print(rounded_tuple(pose))
 		set_joint_positions(world.robot, joint_idx, pose)
-		ee_pose = get_link_pose(world.robot, link_from_name(world.robot, 'l_gripper_tool_frame'))
+		ee_pose = get_link_pose(world.robot, link_from_name(world.robot, 'right_gripper'))
 		draw_sphere_marker(ee_pose[0], radius, bluecolor)
 	######################
 	
