@@ -21,10 +21,11 @@ sys.path.extend(os.path.abspath(os.path.join(os.getcwd(), d)) for d in ['pddlstr
 # from utils import load_env, get_collision_fn_PR2, execute_trajectory, draw_sphere_marker
 from pybullet_tools.utils import connect, disconnect, draw_circle,  get_movable_joint_descendants, wait_for_user, wait_if_gui, joint_from_name, get_joint_positions, set_joint_positions, get_joint_info, get_link_pose, link_from_name
 
+from utils import  get_collision_fn_franka, execute_trajectory, draw_sphere_marker
 
-
-
-from pybullet_tools.utils import set_pose, Pose, Point, Euler, multiply, get_pose, get_point, create_box, set_all_static, WorldSaver, create_plane, COLOR_FROM_NAME, stable_z_on_aabb, pairwise_collision, elapsed_time, get_aabb_extent, get_aabb, create_cylinder, set_point, get_function_name, wait_for_user, dump_world, set_random_seed, set_numpy_seed, get_random_seed, get_numpy_seed, set_camera, set_camera_pose, link_from_name, get_movable_joints, get_joint_name
+from pybullet_tools.utils import joint_from_name, get_joint_info, get_links, get_link_name, get_joint_positions, wait_for_user, set_joint_positions, single_collision, \
+	get_custom_limits, CIRCULAR_LIMITS, interval_generator
+from pybullet_tools.utils import set_pose, Pose, Point, Euler, multiply, get_pose, get_point, get_links,get_link_name, create_box, set_all_static, WorldSaver, create_plane, COLOR_FROM_NAME, stable_z_on_aabb, pairwise_collision, elapsed_time, get_aabb_extent, get_aabb, create_cylinder, set_point, get_function_name, wait_for_user, dump_world, set_random_seed, set_numpy_seed, get_random_seed, get_numpy_seed, set_camera, set_camera_pose, link_from_name, get_movable_joints, get_joint_name
 from pybullet_tools.utils import CIRCULAR_LIMITS, get_custom_limits, set_joint_positions, interval_generator, get_link_pose, interpolate_poses
 
 from pybullet_tools.ikfast.franka_panda.ik import PANDA_INFO, FRANKA_URDF
@@ -36,6 +37,8 @@ from src.utils import JOINT_TEMPLATE, BLOCK_SIZES, BLOCK_COLORS, COUNTERS, \
 	BLOCK_TEMPLATE, name_from_type, GRASP_TYPES, SIDE_GRASP, joint_from_name, \
 	STOVES, TOP_GRASP, randomize, LEFT_DOOR, point_from_pose, translate_linearly
 
+world = World(use_gui=True)
+# from collision import get_sample_fn,interpolate_configs,no_collision
 UNIT_POSE2D = (0., 0., 0.)
 
 def add_ycb(world, ycb_type, idx=0, counter=0, **kwargs):
@@ -56,6 +59,17 @@ def pose2d_on_surface(world, entity_name, surface_name, pose2d=UNIT_POSE2D):
 add_sugar_box = lambda world, **kwargs: add_ycb(world, 'sugar_box', **kwargs)
 add_spam_box = lambda world, **kwargs: add_ycb(world, 'potted_meat_can', **kwargs)
 
+# def get_sample_fn(body, joints, custom_limits={}, **kwargs):
+# 	lower_limits, upper_limits = get_custom_limits(body, joints, custom_limits, circular_limits=CIRCULAR_LIMITS)
+# 	generator = interval_generator(lower_limits, upper_limits, **kwargs)
+# 	def fn():
+# 		return tuple(next(generator))
+# 	return fn
+
+
+# def collision(robot_config):
+# 	return collision_fn(robot_config)
+
 def get_sample_fn(body, joints, custom_limits={}, **kwargs):
 	lower_limits, upper_limits = get_custom_limits(body, joints, custom_limits, circular_limits=CIRCULAR_LIMITS)
 	generator = interval_generator(lower_limits, upper_limits, **kwargs)
@@ -63,12 +77,179 @@ def get_sample_fn(body, joints, custom_limits={}, **kwargs):
 		return tuple(next(generator))
 	return fn
 
+#generate steps between start and end configurations
+def interpolate_configs(start_config, end_config, num_steps = int(10)):
+	out = []
+	start_config = list(start_config)
+	end_config = list(end_config)
+
+	#print('start config:', start_config)
+	#print('end config:', end_config)
+
+	for i in range(num_steps):
+		fraction = float(i) / num_steps
+		list1 = list(x * (1-fraction) for x in start_config) 
+		list2 = list(x * (fraction) for x in end_config)
+		config = [a + b for a, b in zip(list1, list2)]
+		out.append(tuple(config))
+	return out
+
+
+
+class rrt_helpers:
+
+	def __init__(self, joint_number, start_config, joint_limits, joint_names):
+		self.joints = joint_number
+		self.rrt = [start_config]
+		self.parents = {} # a dictionary key: tuple(a config), value: tuple(parent's config)
+		self.joint_limits = joint_limits
+		self.joint_names = joint_names
+
+	def current_pos(self):
+		joint_idx = [joint_from_name(world.robot, joint) for joint in self.joint_names]
+		return tuple(get_joint_positions(world.robot, joint_idx))
+
+	#collision fuction
+	def no_collision(self,start_config, end_config):
+		i = 0
+		for step in interpolate_configs(start_config, end_config):
+			set_joint_positions(world.robot, world.arm_joints, step)
+			#wait_for_user('step' + str(i))
+			#i += 1
+			if single_collision(world.robot):
+				return False
+		return True
+
+	def find_nearest_neighbor(self,rand_node):
+		distances = []
+		for node in self.rrt:
+			distances.append(self.distance(node, rand_node))
+		min_index = np.argmin(distances)
+		return self.rrt[min_index]
+
+	def direction(self,config1, config2):
+		# return the direction of each 7 DOF joint (a list)
+		# print("configs", config1, "2", config2)
+		dirs = []
+		for i in range(self.joints):
+			if config1[i] > config2[i]:
+				# print("clockwise")
+				dirs.append(-1) # clockwise
+			elif config1[i] <= config2[i]:
+				# print("anticlock")
+				dirs.append(+1) # counter-clockwise
+			# else:
+				# print("none")
+				# dirs.append(0)
+		return dirs
+
+
+	def distance(self,n1, n2):
+		# print("n1", n1, "n2", n2,"en(joint_limits)",self.joints)
+		dist = 0
+		weights = [0.1, 2.5, 0.6, 0.4, 0.3, 0.1, 1.0]
+		for i in range(self.joints):
+			dist += abs( n1[i] - n2[i])*weights[i]
+		return dist # Sum of angle error TODO: Distance Metrics! 6DOF
+
+
+	def sample_node(self,goal_node, goal_bias_prob, joints_start, joints_scale):
+		# r = rd.random() # float [0.0, 1.0)
+		r = np.random.random(1)
+		if r <= goal_bias_prob:
+			return goal_node 
+		else:
+			random_config = []
+			rand_angles = np.random.rand(self.joints)
+			for i in range(self.joints):
+				# random_angle = rd.random() # TODO: uniform random
+				random_config.append(joints_start[i] + rand_angles[i] * joints_scale[i])      
+			
+			return tuple(random_config)
+	def rrt_connect(self,near_node, rand_node, step_size, curmincost, goal_node):
+		dirs = self.direction(near_node,rand_node)
+		# print("near_node",near_node,"dirs", dirs)
+		canbreak = True # assume go to rand and can break!
+		new_node = [0, 0, 0, 0, 0, 0,0]
+		for i in range(self.joints):
+			if abs(rand_node[i] - near_node[i]) <= step_size:
+				new_node[i] = rand_node[i]
+			else:
+				new_node[i] = near_node[i] + dirs[i]*step_size
+				canbreak = False
+		if(canbreak):
+			if self.distance(goal_node, new_node) < curmincost:
+				curmincost = self.distance(goal_node, new_node)
+				print("update cur min cost: ",curmincost)
+			self.rrt.append(rand_node)
+			self.parents[rand_node] = near_node
+			return self.rrt[-1], curmincost
+
+		while self.no_collision(self.current_pos(),new_node) and self.in_limit(new_node) and not canbreak:
+		# while self.in_limit(new_node) and not canbreak:
+			if self.distance(goal_node, new_node) < curmincost:
+				curmincost = self.distance(goal_node, new_node)
+				print("update cur min cost: ",curmincost)
+
+			self.rrt.append(tuple(new_node))
+			self.parents[tuple(new_node)] = tuple(near_node)
+			near_node = tuple(new_node) # update parent
+			
+			canbreak = True
+			for i in range(self.joints):
+				if abs(rand_node[i] - near_node[i]) <= step_size:
+					new_node[i] = rand_node[i]
+					# print("joint ",i," reach rand_node")        
+				else:
+					new_node[i] = near_node[i] + dirs[i]*step_size
+					canbreak = False
+
+			if canbreak:
+				self.rrt.append(tuple(new_node))
+				self.parents[tuple(new_node)] = near_node
+				break
+
+		return self.rrt[-1], curmincost
+
+
+	def step(self,near_node, rand_node, step_size):
+		dirs = direction(near_node, rand_node)
+		new_node = tuple(near_node[i] + dirs[i]*step_size for i in range(len(joint_limits))) # stear ONE STEP from near to rand 'direction'!
+		return new_node
+
+
+
+	def reach_goal(self,goal_node, node, goal_threshold):
+		# print("Distance from cur pose to goal config: ",distance(goal_node, node))
+		return self.distance(goal_node, node) <= goal_threshold
+
+	def extract_path(self,parents, node, root_parent, debug=False):
+		path = []
+		while parents[node]!= root_parent:
+			if debug:
+				print("Node:   ",rounded_tuple(node))
+				print("Parent: ",rounded_tuple(parents[node]))
+			path.append(node)
+			node = parents[node]
+		path.reverse()
+		return path
+
+
+	def in_limit(self,config):
+		for i in range(self.joints):
+			if (config[i] < self.joint_limits[self.joint_names[i]][0] or \
+			   config[i] > self.joint_limits[self.joint_names[i]][1]) and i != 4: # KEY: joint 4 has no limit!
+			   print("joint ",i," out of bound.",self.joint_limits[self.joint_names[i]], " angle: ",config[i])
+			   return False
+		return True
+
 def main():
 	print('Random seed:', get_random_seed())
 	print('Numpy seed:', get_numpy_seed())
 
 	np.set_printoptions(precision=3, suppress=True)
-	world = World(use_gui=True)
+
+	# print("worls", world)
 	sugar_box = add_sugar_box(world, idx=0, counter=1, pose2d=(-0.2, 0.65, np.pi / 4))
 	spam_box = add_spam_box(world, idx=1, counter=0, pose2d=(0.2, 1.1, np.pi / 4))
 	wait_for_user()
@@ -96,15 +277,46 @@ def main():
 
 	# parse active DoF joint limits
 	joint_limits = {joint_names[i] : (get_joint_info(world.robot, joint_idx[i]).jointLowerLimit, get_joint_info(world.robot, joint_idx[i]).jointUpperLimit) for i in range(len(joint_idx))}
+	#specifying obstacles!
+	obstacles = get_links(world.kitchen)
+	obstacle_names = [get_link_name(world.kitchen, link) for link in obstacles]
 
-	collision_fn = get_collision_fn_franka(world.robot, joint_idx, list(obstacles.values()))
-	# Example use of collision checking
-	# print("Robot colliding? ", collision_fn((0.5, 1.19, -1.548, 1.557, -1.32, -0.1928)))
 
-	start_config = tuple(get_joint_positions(robots['pr2'], joint_idx))
-	goal_config = (0.5, 0.33, -1.548, 1.557, -1.32, -0.1928)
+	robotlinks = get_links(world.robot)
+	robotlinks_names = [get_link_name(world.robot, link) for link in robotlinks]
+	# print("obs" ,obstacles)
+	print("obstacles are ",robotlinks_names)
+
+	#test = p.getClosestPoints(joint_idx[0],obstacles[1],1000000)
+
+
+
+	# start_config = tuple(get_joint_positions(world.robot, joint_idx))
+	sample_fn = get_sample_fn(world.robot, world.arm_joints)
+	start_config = sample_fn()
+
+	# goal_config = (0.5, 0.33, -1.548, 1.557, -1.32, -0.1928, 0)
+	goal_config = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+	print("Going to operate the base without collision checking")
+	for i in range(100):
+		goal_pos = translate_linearly(world, 0.01) # does not do any collision checking!!
+		set_joint_positions(world.robot, world.base_joints, goal_pos)
+		if (i % 30 == 0):
+			wait_for_user()
+	#base spawn position
+	spawn_pos = np.array([.85, .8, np.pi])
+	set_joint_positions(world.robot, world.base_joints, spawn_pos)
+
 	path = []
+	rrt_obj = rrt_helpers(len(joint_limits),start_config, joint_limits, joint_names)
 
+	# collision_fn = get_collision_fn_franka(world.robot, joint_idx, list(obstacles))
+	# collision_fn = rrt_obj.no_collision
+
+	# Example use of collision checking
+	# print("Robot colliding? ", no_collision((0.5, 1.19, -1.548, 1.557, -1.32, -0.1928)))
+	print("Robot not colliding? ", rrt_obj.no_collision(start_config,goal_config))
 	### 
 	start_time = time.time()
 
@@ -115,34 +327,182 @@ def main():
 	print(joint_limits)
 
 
-    joints_start = [joint_limits[joint_names[i]][0] for i in range(len(joint_limits))]
-    joints_scale = [abs(joint_limits[joint_names[i]][0] - joint_limits[joint_names[i]][1]) for i in range(len(joint_limits))]
-    print("joint start: ",joints_start)
-    print("joint scale: ",joints_scale)
-    # print("joints scale: ",joints_scale)
+	joints_start = [joint_limits[joint_names[i]][0] for i in range(len(joint_limits))]
+	joints_scale = [abs(joint_limits[joint_names[i]][0] - joint_limits[joint_names[i]][1]) for i in range(len(joint_limits))]
+	print("joint start: ",joints_start)
+	print("joint scale: ",joints_scale)
+	# print("joints scale: ",joints_scale)
 
-    ###### Modify Parameters ######
-    """
-    Edit the part below
-    """
 
-    # KEY: node : a tuple, NOT list! 
-    step_size = 0.05 #rad for each joint (revolute)
-    goal_bias_prob = 0.1 # goal_bias: 10%
-    goal_node = goal_config
-    root_parent = (-1,-1,-1,-1,-1,-1)
-    # Total: 6 DOF 
-    K = 3000  # 10000 nodes iter: 81, rrt# 987
-    rrt = [start_config]     # a list of config_nodes
-    parents = {} # a dictionary key: tuple(a config), value: tuple(parent's config)
-    parents[start_config] = root_parent
+	###### Modify Parameters ######
+	"""
+	Edit the part below
+	"""
 
-    # goal_threshold = 0.5
-    goal_threshold = 0.4
-    findpath = False
+	# KEY: node : a tuple, NOT list! 
+	step_size = 0.05 #rad for each joint (revolute)
+	goal_bias_prob = 0.1 # goal_bias: 10%
+	goal_node = goal_config
+	root_parent = (-1,-1,-1,-1,-1,-1)
+	# Total: 6 DOF 
+	K = 3000  # 10000 nodes iter: 81, rrt# 987
+	# rrt = [start_config]     # a list of config_nodes
+	rrt_obj.parents[start_config] = root_parent
 
-	# obstacles = [plane] # TODO: collisions with the ground
+	# goal_threshold = 0.5
+	goal_threshold = 0.4
+	findpath = False
 
+
+
+	curmincost = rrt_obj.distance(start_config,goal_config)
+
+
+	print("=================================")
+	print("Start config: ",start_config)
+	print("Goal config: ",goal_config)
+	print("Starting Error: ",rrt_obj.distance(start_config,goal_config))
+	print("RRT algorithm start: ...\n")
+
+	FACTOR = 50
+	final_node = (-1, -1, -1, -1, -1, -1) # super important
+	################ RRT Algorithm here #####################
+	for i in range(K): # from 0 to K-1
+		if i% FACTOR ==0:
+			print("iter ",i)
+		rand_node = rrt_obj.sample_node(goal_node, goal_bias_prob, joints_start, joints_scale) # (with 0.1 goal bias)
+		nearest_node = rrt_obj.find_nearest_neighbor(rand_node)
+		new_node, curmincost = rrt_obj.rrt_connect(nearest_node, rand_node, step_size, curmincost, goal_node)
+
+		if rrt_obj.reach_goal(goal_node, new_node, goal_threshold):
+			findpath = True
+			print("Reach goal! At iter ",i," # nodes in rrt: ", len(rrt_obj.rrt))
+			print("Final pose: ",new_node)
+			final_node = new_node
+			path = rrt_obj.extract_path(rrt_obj.parents, new_node, root_parent)
+			break
+
+	if not findpath:
+		print("No path found under current configuratoin")
+
+	print("Now executing first found path: ")    
+
+	print("Draw left end-effector position (red sphere):")
+	radius = 0.03
+	color = (1, 0, 0, 1)
+	for pose in path:
+		set_joint_positions(world.robot, joint_idx, pose)
+		ee_pose = get_link_pose(world.robot, link_from_name(world.robot, 'right_gripper'))
+		draw_sphere_marker(ee_pose[0], radius, color)
+
+	print("Planner run time: ", time.time() - start_time)
+
+
+	print("Run Shortcut Smoothing Algorithm for 150 iterations...")
+
+	def try_shortcut(parents, node1, node2, step_size):
+		dirs = rrt_obj.direction(node1,node2)
+
+		new_nodes = []
+		tmp_parents = {}
+
+		canbreak = True # assume go to rand and can break!
+		new_node = [0, 0, 0, 0, 0, 0,0]
+		near_node = deepcopy(node1)
+
+					
+		for i in range(len(joint_limits)):
+			if abs(node2[i] - near_node[i]) <= step_size:
+				new_node[i] = deepcopy(node2[i])
+			else:
+				new_node[i] = near_node[i] + dirs[i]*step_size
+				canbreak = False
+		# near_node2 = [0, 0, 0, 0, 0, 0]
+		if(canbreak):
+			tmp_parents[tuple(node2)] = node1
+			for key in tmp_parents:
+				if key == tmp_parents[key] :
+					print("node 1 to node 2")
+					print("key: ", rounded_tuple(key))
+					print("val : ",rounded_tuple(tmp_parents[key]))
+					print("Deadlock here!")
+
+				parents[key] = tmp_parents[key] # copy and paste only if success!
+			return True, new_nodes, parents
+
+		near_node2 = deepcopy(near_node)
+		while rrt_obj.no_collision(rrt_obj.current_pos(),new_node) and rrt_obj.in_limit(new_node) and not canbreak:
+			new_nodes.append(tuple(new_node))
+			tmp_parents[tuple(new_node)] = tuple(near_node)
+			if new_node == near_node:
+				print("Deadlock due to here!")
+			# parents[tuple(new_node)] = tuple(near_node)
+			near_node = deepcopy(tuple(new_node)) # update parent
+			canbreak = True
+			# update new_node
+			for i in range(len(joint_limits)):
+				if abs(node2[i] - near_node[i]) <= step_size:
+					new_node[i] = node2[i]       
+
+				else:
+					new_node[i] = near_node[i] + dirs[i]*step_size
+					canbreak = False
+			near_node2 = deepcopy(near_node) ## KEY!! Why need another variable? use coy!
+
+		# Problem here: Deadlock on the 'last node' : set parent[node2] to be near
+		if canbreak:
+			new_nodes.append(tuple(node2))
+			# print("len of tmp parents: ",len(tmp_parents))
+			lastkey = node1
+			for key in tmp_parents:
+				# print("key: ", rounded_tuple(key))
+				# print("val : ",rounded_tuple(tmp_parents[key]))
+				if key == tmp_parents[key] :
+					tmp_parents[key] = lastkey
+				# Successful shortcut! Add tmp_parents {key:value} to parents
+				rrt_obj.parents[key] = tmp_parents[key] # copy and paste only if success!
+				lastkey = deepcopy(key)
+			return True, new_nodes, rrt_obj.parents
+		else:
+			# Fail, don't do any modification
+			return False, new_nodes, rrt_obj.parents
+
+
+	ITERATIONS = 150 # should be 150
+	for it in range(ITERATIONS):
+		id1, id2 = np.random.randint(low=0, high =len(path)-1, size=2)
+		while(id1 == id2): # KEY : CANNOT Pick two equal points! Otherwise: Deadlock!!
+			id1, id2 = np.random.randint(low=1, high=len(path)-2, size=2)
+		if id1 < id2:
+			n1 = path[id1]
+			n2 = path[id2]
+		else:
+			n1 = path[id2]
+			n2 = path[id1]
+		success, new_nodes, rrt_obj.parents =  try_shortcut(rrt_obj.parents, n1, n2, step_size)
+
+	print("Extracing optimized path...")
+	optimized_path = rrt_obj.extract_path(rrt_obj.parents, final_node, root_parent, False) #debug=True)
+
+	print("\n =======================")
+	print("First Path    : ", len(path)," nodes")
+	print("Optimized Path: ", len(optimized_path), " nodes")
+
+
+	print("Now execute optimized_path:")
+
+	print("Optimized path:")
+	bluecolor = (0, 0, 1, 1)
+	for pose in optimized_path:
+		print(rounded_tuple(pose))
+		set_joint_positions(world.robot, joint_idx, pose)
+		ee_pose = get_link_pose(world.robot, link_from_name(world.robot, 'right_gripper'))
+		draw_sphere_marker(ee_pose[0], radius, bluecolor)
+	######################
+	
+	# Execute planned path
+	print("Now executing shortcut smoothed path: ")    
+	execute_trajectory(world.robot, joint_idx, optimized_path, sleep=0.1)
 	# dump_body(robot)
 	# print('Start?')
 	# wait_for_user()
