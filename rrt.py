@@ -47,6 +47,16 @@ def add_ycb(world, ycb_type, idx=0, counter=0, **kwargs):
 	pose2d_on_surface(world, name, COUNTERS[counter], **kwargs)
 	return name
 
+
+def round_if_float(value):
+    if isinstance(value, float):
+        return Decimal(str(value)).quantize(Decimal('1.00'))
+    else:
+        return value
+
+def rounded_tuple(tup):
+    return tuple(round_if_float(value) for value in tup)
+
 def pose2d_on_surface(world, entity_name, surface_name, pose2d=UNIT_POSE2D):
 	x, y, yaw = pose2d
 	body = world.get_body(entity_name)
