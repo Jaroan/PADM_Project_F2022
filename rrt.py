@@ -249,9 +249,9 @@ class rrt_helpers:
 	def in_limit(self,config):
 		for i in range(self.joints):
 			if (config[i] < self.joint_limits[self.joint_names[i]][0] or \
-			   config[i] > self.joint_limits[self.joint_names[i]][1]) and i != 4: # KEY: joint 4 has no limit!
-			   print("joint ",i," out of bound.",self.joint_limits[self.joint_names[i]], " angle: ",config[i])
-			   return False
+				config[i] > self.joint_limits[self.joint_names[i]][1]) and i != 4: # KEY: joint 4 has no limit!
+				print("joint ",i," out of bound.",self.joint_limits[self.joint_names[i]], " angle: ",config[i])
+				return False
 		return True
 
 # def move_robot_arm(world, target_pose):
