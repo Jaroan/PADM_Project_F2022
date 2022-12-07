@@ -44,6 +44,9 @@ The planning algorithm choosen was RRT on the Franka Panda robot.
 - Explain how you integrated the activity plan with the motion plan
 - GIF/video of the robot executing the plan and embedded in the README
 
+## Section 3: Trajectory Optimization
+
+![Trajectory Optimization](optimized_trajectory.gif)
 
 
 
