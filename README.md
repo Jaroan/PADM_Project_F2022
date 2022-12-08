@@ -98,8 +98,8 @@ $$
         \min_{x} &\qquad |X_{0:n-1} - X_{1:n}|^2        \\
         \text{subject to} &\qquad X_0 = \text{starting pose} \\
         &\qquad X_n = \text{goal pose} \\
-        &\qquad L_{lower} \le X_i \le L_{upper}  &\qquad i = 0, 1, 2, ...  \: n\\
-        &\qquad X_{i+1} - X_i \le T &\qquad i = 0, 1, 2, ...  \: n
+        &\qquad L_{lower} \le X_i \le L_{upper}  &\qquad i = 0, 1, 2, ... \space n\\
+        &\qquad X_{i+1} - X_i \le T &\qquad i = 0, 1, 2, ... \space n
          \\
     \end{aligned}
 }
