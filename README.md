@@ -105,11 +105,11 @@ $$
 }
 $$
 
-Our constraint optimization problem is formalized above, where $X$ is a $ n \times 7 $ matrix representing our $7$ joint positions over $n$ time-steps. 
+Our constraint optimization problem is formalized above, where $X$ is a $n \times 7$ matrix representing our $7$ joint positions over $n$ time-steps. 
 The cost function calculates the distance travelled by every joint at each timestep. 
 Our constraints are as follows: 
 time-step (row) $0$ and $n$ must be equal to our starting and goal poses, 
-joint positions at any time step cannot exceed lower ($L_{lower}$) and upper ($L_{upper}$) joint limits,
+joint positions at any time step cannot exceed lower ( $L_{lower}$ ) and upper ( $L_{upper}$ ) joint limits,
 and joint distance at any timestep cannot exceed $T$ (a vector representing max distance each joint is able to travel). 
 
 #### <b> Results</b>
