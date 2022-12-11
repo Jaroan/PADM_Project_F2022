@@ -3,22 +3,27 @@ import sys, time
 
 # '''
 class Planner:
+
+    def __init__(self):
+
+        self.parser = PDDL_Parser()
+
     def solve(self, domain, problem):
         # Parser
-        parser = PDDL_Parser() 
-        parser.parse_domain(domain)
-        parser.parse_problem(problem)
+        # parser = PDDL_Parser() 
+        self.parser.parse_domain(domain)
+        self.parser.parse_problem(problem)
         # Parsed data
-        state = parser.state
-        goal_pos = parser.positive_goals
-        goal_not = parser.negative_goals
+        state = self.parser.state
+        goal_pos = self.parser.positive_goals
+        goal_not = self.parser.negative_goals
         # Do nothing
         if self.applicable(state, goal_pos, goal_not):
             return []
         # Grounding process
         ground_actions = []
-        for action in parser.actions:
-            for act in action.groundify(parser.objects, parser.types):
+        for action in self.parser.actions:
+            for act in action.groundify(self.parser.objects, self.parser.types):
                 ground_actions.append(act)
         # Search
         visited = set([state])
@@ -35,6 +40,7 @@ class Planner:
                             while plan:
                                 act, plan = plan
                                 full_plan.insert(0, act)
+
                             return full_plan
                         visited.add(new_state)
                         fringe.append(new_state)
@@ -79,17 +85,19 @@ if __name__ == '__main__':
 
 '''
 
-start_time = time.time()
-domain = 'domain.pddl'
-problem = 'problem.pddl'
-verbose = len(sys.argv) > 3 and sys.argv[3] == '-v'
-planner = Planner()
-plan = planner.solve(domain, problem)
-print('Time: ' + str(time.time() - start_time) + 's')
-if type(plan) is list:
-    print('plan:')
-    for act in plan:
-        print(act if verbose else act.name + ' ' + ' '.join(act.parameters))
-else:
-    print('No plan was found')
-    exit(1)
+# start_time = time.time()
+# domain = 'domain.pddl'
+# problem = 'problem.pddl'
+# verbose = len(sys.argv) > 3 and sys.argv[3] == '-v'
+# planner = Planner()
+# plan = planner.solve(domain, problem)
+# print('Time: ' + str(time.time() - start_time) + 's')
+# if type(plan) is list:
+#     print('plan:')
+#     for act in plan:
+#         # print(act if verbose else act.name + ' ' + ' '.join(act.parameters))
+#         print(act.name + ' ' + ' '.join(act.parameters))
+
+# else:
+#     print('No plan was found')
+#     exit(1)

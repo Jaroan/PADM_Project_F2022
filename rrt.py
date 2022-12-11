@@ -69,12 +69,7 @@ def pose2d_on_surface(world, entity_name, surface_name, pose2d=UNIT_POSE2D):
 add_sugar_box = lambda world, **kwargs: add_ycb(world, 'sugar_box', **kwargs)
 add_spam_box = lambda world, **kwargs: add_ycb(world, 'potted_meat_can', **kwargs)
 
-# def get_sample_fn(body, joints, custom_limits={}, **kwargs):
-# 	lower_limits, upper_limits = get_custom_limits(body, joints, custom_limits, circular_limits=CIRCULAR_LIMITS)
-# 	generator = interval_generator(lower_limits, upper_limits, **kwargs)
-# 	def fn():
-# 		return tuple(next(generator))
-# 	return fn
+
 
 
 # def collision(robot_config):

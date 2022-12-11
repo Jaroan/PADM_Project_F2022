@@ -2,10 +2,27 @@ import gitmodules # need to pip install
 __import__('padm-project-2022f') 
 __import__('ss-pybullet') 
 # from pybullet_tools.utils  import get_collision_fn, get_floating_body_collision_fn, expand_links
-from pybullet_tools.utils import set_joint_positions, \
-    wait_if_gui, wait_for_duration, get_collision_data,BASE_LINK
+from pybullet_tools.utils import CIRCULAR_LIMITS,set_joint_positions, \
+    wait_if_gui, wait_for_duration, interval_generator, get_custom_limits, get_collision_data,BASE_LINK
 import pybullet as p
 
+
+def round_if_float(value):
+    if isinstance(value, float):
+        return Decimal(str(value)).quantize(Decimal('1.00'))
+    else:
+        return value
+
+def rounded_tuple(tup):
+    return tuple(round_if_float(value) for value in tup)
+
+
+def get_sample_fn(body, joints, custom_limits={}, **kwargs):
+    lower_limits, upper_limits = get_custom_limits(body, joints, custom_limits, circular_limits=CIRCULAR_LIMITS)
+    generator = interval_generator(lower_limits, upper_limits, **kwargs)
+    def fn():
+        return tuple(next(generator))
+    return fn
 
 def get_collision_fn_franka(robot, joints, obstacles):
     # check robot collision with environment
