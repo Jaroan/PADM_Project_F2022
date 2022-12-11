@@ -23,7 +23,7 @@ from src.utils import translate_linearly
 # obstacles = get_links(world.kitchen)
 # obstacle_names = [get_link_name(world.kitchen, link) for link in obstacles]
 
-#generate position based on joint limits
+'''generate position based on joint limits'''
 def get_sample_fn(body, joints, custom_limits={}, **kwargs):
     lower_limits, upper_limits = get_custom_limits(body, joints, custom_limits, circular_limits=CIRCULAR_LIMITS)
     generator = interval_generator(lower_limits, upper_limits, **kwargs)
@@ -31,7 +31,7 @@ def get_sample_fn(body, joints, custom_limits={}, **kwargs):
         return tuple(next(generator))
     return fn
 
-#generate steps between start and end configurations
+'''generate steps between start and end configurations'''
 def interpolate_configs(start_config, end_config, num_steps = int(10)):
     out = []
     start_config = list(start_config)
@@ -48,7 +48,7 @@ def interpolate_configs(start_config, end_config, num_steps = int(10)):
         out.append(tuple(config))
     return out
 
-#collision fuction
+'''collision fuction'''
 def no_collision(start_config, end_config):
     i = 0
     for step in interpolate_configs(start_config, end_config):
