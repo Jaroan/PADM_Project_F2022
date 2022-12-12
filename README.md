@@ -5,7 +5,13 @@
 
 ## Introduction
 
-#### <b> Learning Objectives </b>
+#### <b> Project Objectives </b>
+- In a provided kitchen simulation enviroment pick and place food items into goal positions using a robotic arm (Franka "Panda")
+   - Place spam in drawer
+   - Place sugar on countertop
+
+
+#### <b> Overall Learning Objectives </b>
 - Apply search, planning, constraint satisfaction, optimization, and probabilistic 
 reasoning algorithms to real-world autonomy and decision-making problems
 - Implement  search,  planning,  constraint  satisfaction, and optimization.
@@ -43,6 +49,28 @@ In our domain file, we have 4 predicates
 - `domain.pddl`: defines the “universal” aspects of the kitchen problem
 - `problem.pddl`: defines the global “worldly” aspects of the kitchen problem
 - `planner.py`: takes .pddl files and uses breath-first search to calculate a plan
+
+#### <b> Results </b>
+
+<details>
+<summary>planner.py output</summary>
+
+```{python}
+Time: 0.00167083740234375s
+plan:
+move arm counter drawer
+opendrawer arm drawer
+move arm drawer stove
+pickuptop arm sugar stove
+move arm stove counter
+droptop arm sugar counter
+pickuptop arm spam counter
+move arm counter drawer
+dropdrawer arm spam drawer
+closedrawer arm drawer
+```
+
+</details>
 
 #### <b> Challenges </b>
 - In our first iteration of the .pddl files, we struggled with generating a valid domain and problem file that was solvable by our planner. 
