@@ -23,7 +23,7 @@ from utils import get_sample_fn,round_if_float,rounded_tuple, get_collision_fn_f
 
 from planner import Planner
 
-# from rrt import rrt_helpers
+from rrt2 import rrt_helpers
 
 from pybullet_tools.utils import connect, disconnect, draw_circle,  get_movable_joint_descendants, wait_for_user, wait_if_gui, get_joint_name, \
 	 joint_from_name, get_joint_positions, set_joint_positions, get_joint_info, get_link_pose, link_from_name, get_joint_limits,\
@@ -141,7 +141,7 @@ class PlanExecutor():
 		target_end_joint_angles = next(closest_inverse_kinematics(world.robot, PANDA_INFO, self.tool_link, target_end_pose, max_time=0.05), None)
 
 		set_joint_positions(world.robot, world.arm_joints, target_end_joint_angles)
-
+		# print("draw done!",target_end_joint_angles)
 		# if command.lower() == 'opened':
 		# 	drawer_pos = 0.4
 		# elif command.lower() == 'closed':
@@ -158,23 +158,82 @@ class PlanExecutor():
 		}
 		
 		wait_for_user('Going to set base in front of sugar box')
-		self.sugar_arm = (-0.1, 1.25, 0, -0.6, 0 ,3.04 , 0.741)
+		# self.sugar_arm = (-0.1, 1.25, 0, -0.6, 0 ,3.04 , 0.741)
 		self.sugar_base = (0.8, 0.5, -3.14)
 
+		# print("Planner run time: ", time.time() - start_time)		
 		set_joint_positions(world.robot, world.base_joints, self.sugar_base)
-		set_joint_positions(world.robot, world.arm_joints, self.sugar_arm )
+		# set_joint_positions(world.robot, world.arm_joints, self.sugar_arm )
 
 		wait_for_user('Grasping sugar box')
 		sugar_box_att = create_attachment(world.robot, link_from_name(world.robot, 'panda_hand'), world.get_body(sugar_box))
 
 		wait_for_user('Attempting to move sugar box')
-		point2_arm = (3.14, 1.25, 0, -0.6, 0 ,3.04 , 0.741)
-		set_joint_positions(world.robot, world.arm_joints, point2_arm)
-		sugar_box_att.assign()
+		point2_arm = (1.0, 1.25, 0, -0.6, 0 ,3.04 , 0.741)
+		joints_pos = get_joint_positions(world.robot, world.arm_joints)
+		start_config = joints_pos
+		rrt_obj = rrt_helpers(world, start_config)
 
-		wait_for_user('Attempting to move sugar box')
-		point2_arm = (-1.0, 1.00, 0, -0.6, 0 ,3.04 , 0.741)
-		set_joint_positions(world.robot, world.arm_joints, point2_arm)
+		goal_config = point2_arm 
+		# KEY: node : a tuple, NOT list! 
+		step_size = 0.05 #rad for each joint (revolute)
+		goal_bias_prob = 0.2 # goal_bias: 10%
+		goal_node = goal_config
+		root_parent = (-1,-1,-1,-1,-1,-1)
+		# Total: 6 DOF 
+		K = 3000  # 10000 nodes iter: 81, rrt# 987
+		# rrt = [start_config]     # a list of config_nodes
+		rrt_obj.parents[start_config] = root_parent
+
+		# goal_threshold = 0.5
+		goal_threshold = 0.1
+		findpath = False
+
+
+
+		curmincost = rrt_obj.distance(start_config,goal_config)
+
+
+		print("=================================")
+		print("Start config: ",start_config)
+		print("Goal config: ",goal_config)
+		print("Starting Error: ",rrt_obj.distance(start_config,goal_config))
+		print("RRT algorithm start: ...\n")
+
+		FACTOR = 50
+		final_node = (-1, -1, -1, -1, -1, -1) # super important
+		################ RRT Algorithm here #####################
+		for i in range(K): # from 0 to K-1
+			if i% FACTOR ==0:
+				print("iter ",i)
+			rand_node = rrt_obj.sample_node(goal_node, goal_bias_prob) # (with 0.1 goal bias)
+			# print("RAND", rand_node)
+
+			nearest_node = rrt_obj.find_nearest_neighbor(rand_node)
+			new_node, curmincost = rrt_obj.rrt_connect(nearest_node, rand_node, step_size, curmincost, goal_node)
+			# print("iter", i)
+			if rrt_obj.reach_goal(goal_node, new_node, goal_threshold):
+				findpath = True
+				print("Reach goal! At iter ",i," # nodes in rrt: ", len(rrt_obj.rrt))
+				print("Final pose: ",new_node)
+				final_node = new_node
+				# print("hi")
+				path = rrt_obj.extract_path(rrt_obj.parents, new_node, root_parent)
+				# print("hi")
+				break
+
+
+		if not findpath:
+			print('Failure!')
+	#             wait_for_user()
+	#             break
+			print("No path found under current configuratoin")
+
+		print("Now executing first found path: ")    
+
+		for pose in path:
+			set_joint_positions(world.robot, rrt_obj.joint_idx, pose)		
+		# set_joint_positions(world.robot, world.arm_joints, point2_arm)
 		sugar_box_att.assign()
 
 	def spam_move(self):
@@ -230,34 +289,231 @@ class PlanExecutor():
 		# set_tool_pose(world, pose)
 
 		wait_for_user('Grasping spam box')
-		spam_box_att = create_attachment(world.robot, link_from_name(world.robot, 'panda_hand'), world.get_body('potted_meat_can1'))
+		spam_box_att = create_attachment(world.robot, link_from_name(world.robot, 'panda_hand'), world.get_body(spam_box))
+		success = False
 
+		for i in range(10):
+			conf = next(closest_inverse_kinematics(world.robot, PANDA_INFO, tool_link, pose, max_time=0.05), None)
+
+			if conf != None:
+				success = True
+				break
+
+			if i == 9:
+				print("Unable to run inverse kinematics successfully!")
+
+		if success:
+			print("The joint angles to achieve this pose is: ", conf)
+
+			set_joint_positions(world.robot, world.arm_joints, conf)
+		# spam_box_att.assign()
 		wait_for_user('Attempting to move spam box')
+		conf = get_link_pose(world.kitchen, link_from_name(world.kitchen, 'indigo_drawer_handle_top'))
+		# print("co", conf)
+		# print("pose", Pose([0.501, 1.211, -0.544], [np.pi, 0, 0]))
+		# set_joint_positions(world.robot, world.arm_joints, conf)
+		point2_arm = (0.501, 1.211, -0.544, 1.0, 0.0, 0.0, 0.0)
+		# set_joint_positions(world.robot, world.arm_joints, conf2)
+		point2_arm = (-0.3, 0.9, 0.5, -0.6, 0, 3.04, 0.741)
+		# point2_arm =(0.766644639280754, -0.9740363327481293, 2.8385234538923556, -1.202264637705123, 2.8320684244594108, 2.486451194468681, -1.8538862712887234)
+		# set_joint_positions(world.robot, world.arm_joints, point2_arm)
+
+		# point2_arm = (0,0,0,0,0,0,0)
+		joints_pos = get_joint_positions(world.robot, world.arm_joints)
+		start_config = joints_pos
+		# print("start", start_config)
+	# 	rrt_obj = rrt_helpers(world, start_config)
+
+		link = link_from_name(world.kitchen, 'indigo_drawer_top')
+		# print("lin", link)
+		target_pose = get_link_pose(world.kitchen, link)
+		# print("tar", target_pose)
+		link_lower, link_upper = get_aabb(world.kitchen, link)
+		# front_edge_x_pos = max(link_upper[0], link_lower[0])
+
+		# print("link_lower:", link_lower)
+		# print("link_upper", link_upper)
+		# print("pose of indigo_drawer_top, ", target_pose)
 
 
-		while user_selection != 'end':
-			
-			success = False
+		body = world.get_body(user_obj)
+		coord = get_pose(body)[0]
+		euler_angles = get_euler(body)
+		print("Object ", user_obj, " has coordinates: ", coord)
+		coord = ((coord[0]+x_backoff+0.25), (coord[1]+y_backoff), (coord[2]+(obj_height*3/4))) #Raise z by 0.05 to be at the right height to grip object
 
-			for i in range(10):
-				conf = next(closest_inverse_kinematics(world.robot, PANDA_INFO, tool_link, pose, max_time=0.05), None)
+		pose = (coord, quat_from_euler(tool_euler_angles))
+		print(pose)
+		# target_pose = ((adjusted_target_x, adjusted_target_y, adjusted_target_z), quat_from_euler((0, -np.pi/2, 0)) )
+		success = False
+		for i in range(100):
+			conf = next(closest_inverse_kinematics(world.robot, PANDA_INFO, tool_link, pose, max_time=0.05), None)
 
-				if conf != None:
-					success = True
-					break
+			if conf != None:
+				success = True
+				break
 
-				if i == 9:
-					print("Unable to run inverse kinematics successfully!")
+			if i == 90:
+				print("Unable to run inverse kinematics successfully!")
 
-			if success:
-				print("The joint angles to achieve this pose is: ", conf)
+		if success:
+			print("The joint angles to achieve this pose is: ", conf)
 
-				set_joint_positions(world.robot, world.arm_joints, conf)
+			set_joint_positions(world.robot, world.arm_joints, conf)
+		joints_pos = get_joint_positions(world.robot, world.arm_joints)
+		start_config = joints_pos
+		# print("stat",start_config)
+		# rrt_obj = rrt_helpers(world, len(joint_limits),start_config, joint_limits, joint_names)
+		# rrt_obj = rrt_helpers(world, start_config)
 
-			user_selection = input(" da 'End' or continue? ")
-			user_selection.strip()
+		# goal_config = conf
+		# # KEY: node : a tuple, NOT list! 
+		# step_size = 0.05 #rad for each joint (revolute)
+		# goal_bias_prob = 0.2 # goal_bias: 10%
+		# goal_node = goal_config
+		# root_parent = (-1,-1,-1,-1,-1,-1)
+		# # Total: 6 DOF 
+		# K = 3000  # 10000 nodes iter: 81, rrt# 987
+		# # rrt = [start_config]     # a list of config_nodes
+		# rrt_obj.parents[start_config] = root_parent
+
+		# # goal_threshold = 0.5
+		# goal_threshold = 0.1
+		# findpath = False
 
 
+
+		# curmincost = rrt_obj.distance(start_config,goal_config)
+
+
+		# print("=================================")
+		# print("Start config: ",start_config)
+		# print("Goal config: ",goal_config)
+		# print("Starting Error: ",rrt_obj.distance(start_config,goal_config))
+		# print("RRT algorithm start: ...\n")
+
+		# FACTOR = 50
+		# final_node = (-1, -1, -1, -1, -1, -1) # super important
+		# ################ RRT Algorithm here #####################
+		# for i in range(K): # from 0 to K-1
+		# 	if i% FACTOR ==0:
+		# 		print("iter ",i)
+		# 	rand_node = rrt_obj.sample_node(goal_node, goal_bias_prob) # (with 0.1 goal bias)
+		# 	# print("RAND", rand_node)
+
+		# 	nearest_node = rrt_obj.find_nearest_neighbor(rand_node)
+		# 	new_node, curmincost = rrt_obj.rrt_connect(nearest_node, rand_node, step_size, curmincost, goal_node)
+
+		# 	if rrt_obj.reach_goal(goal_node, new_node, goal_threshold):
+		# 		findpath = True
+		# 		print("Reach goal! At iter ",i," # nodes in rrt: ", len(rrt_obj.rrt))
+		# 		print("Final pose: ",new_node)
+		# 		final_node = new_node
+		# 		path = rrt_obj.extract_path(rrt_obj.parents, new_node, root_parent)
+		# 		break
+
+
+		# if not findpath:
+		# 	print('Failure!')
+		# 	print("No path found under current configuratoin")
+
+		# print("Now executing first found path: ")    
+
+		# for pose in path:
+		# 	set_joint_positions(world.robot, rrt_obj.joint_idx, pose)
+
+
+		spam_box_att.assign()
+
+
+		body = world.get_body(user_obj)
+		coord = get_pose(body)[0]
+		euler_angles = get_euler(body)
+		print("Object ", user_obj, " has coordinates: ", coord)
+
+		set_pose(body, pose)
+		body = world.get_body(user_obj)
+		coord = get_pose(body)[0]
+		euler_angles = get_euler(body)
+		print("Object ", user_obj, " has coordinates: ", coord)
+	def counter_move(self):
+
+		
+		wait_for_user('Going to set base in front of counter')
+		self.sugar_arm = (-0.1, 1.25, 0, -0.6, 0 ,3.04 , 0.741)
+		self.sugar_base = (0.8, 0.5, -3.14)
+		# define active DoFs
+
+		joints_pos = get_joint_positions(world.robot, world.arm_joints)
+		start_config = joints_pos
+		print("stat",start_config)
+		# rrt_obj = rrt_helpers(world, len(joint_limits),start_config, joint_limits, joint_names)
+		rrt_obj = rrt_helpers(world, start_config)
+
+		goal_config = self.sugar_arm 
+		# KEY: node : a tuple, NOT list! 
+		step_size = 0.05 #rad for each joint (revolute)
+		goal_bias_prob = 0.2 # goal_bias: 10%
+		goal_node = goal_config
+		root_parent = (-1,-1,-1,-1,-1,-1)
+		# Total: 6 DOF 
+		K = 3000  # 10000 nodes iter: 81, rrt# 987
+		# rrt = [start_config]     # a list of config_nodes
+		rrt_obj.parents[start_config] = root_parent
+
+		# goal_threshold = 0.5
+		goal_threshold = 0.1
+		findpath = False
+
+
+
+		curmincost = rrt_obj.distance(start_config,goal_config)
+
+
+		print("=================================")
+		print("Start config: ",start_config)
+		print("Goal config: ",goal_config)
+		print("Starting Error: ",rrt_obj.distance(start_config,goal_config))
+		print("RRT algorithm start: ...\n")
+
+		FACTOR = 50
+		final_node = (-1, -1, -1, -1, -1, -1) # super important
+		################ RRT Algorithm here #####################
+		for i in range(K): # from 0 to K-1
+			if i% FACTOR ==0:
+				print("iter ",i)
+			rand_node = rrt_obj.sample_node(goal_node, goal_bias_prob) # (with 0.1 goal bias)
+			# print("RAND", rand_node)
+
+			nearest_node = rrt_obj.find_nearest_neighbor(rand_node)
+			new_node, curmincost = rrt_obj.rrt_connect(nearest_node, rand_node, step_size, curmincost, goal_node)
+			# print("iter", i)
+			if rrt_obj.reach_goal(goal_node, new_node, goal_threshold):
+				findpath = True
+				print("Reach goal! At iter ",i," # nodes in rrt: ", len(rrt_obj.rrt))
+				print("Final pose: ",new_node)
+				final_node = new_node
+				print("hi")
+				path = rrt_obj.extract_path(rrt_obj.parents, new_node, root_parent)
+				print("hi")
+				break
+
+
+		if not findpath:
+			print('Failure!')
+	#             wait_for_user()
+	#             break
+			print("No path found under current configuratoin")
+
+		print("Now executing first found path: ")    
+
+		for pose in path:
+			set_joint_positions(world.robot, rrt_obj.joint_idx, pose)
+			# ee_pose = get_link_pose(world.robot, link_from_name(world.robot, 'right_gripper'))
+			# draw_sphere_marker(ee_pose[0], radius, color)
+
+		# print("Planner run time: ", time.time() - start_time)		
+		set_joint_positions(world.robot, world.base_joints, self.sugar_base)
 
 
 	def run(self):
@@ -300,7 +556,10 @@ class PlanExecutor():
 			elif  str(action.name)+" "+str(action.parameters[1]) == "dropdrawer spam":
 				self.arm_plan_dict[action.name+str(action.parameters[1])] = object_postion_dict["spam"]
 				self.base_plan_dict[action.name+str(action.parameters[1])] = base_position_list["drawer"]
-
+			elif str(action.name)+" "+str(action.parameters[1]) == "move drawer":
+				# print(str(action.name)+str(action.parameters[1]), " 0 0",base_position_list["counter"])
+				self.arm_plan_dict[action.name+str(action.parameters[1])] = object_postion_dict["sugar"]
+				self.base_plan_dict[action.name+str(action.parameters[1])] = base_position_list["counter"]
 			# print(self.arm_plan_dict)
 			# print(self.base_plan_dict)
 			# wait_for_user()
@@ -309,35 +568,56 @@ class PlanExecutor():
 			print("Step", i+1, action.parameters[0], action.name, "to do ",action.parameters[1:])
 			print(str(action.name)+" "+str(action.parameters[1]))
 			if str(action.name)+" "+str(action.parameters[1]) == "move counter":
+				print("!")
 				# print(str(action.name)+str(action.parameters[1]), " 0 0",base_position_list["counter"])
 				set_joint_positions(world.robot, world.arm_joints, self.arm_plan_dict[action.name+str(action.parameters[1])])
 				set_joint_positions(world.robot, world.base_joints, self.base_plan_dict[action.name+str(action.parameters[1])])
 
-			elif  str(action.name)+" "+str(action.parameters[1]) == "opendrawer drawer" or str(action.name)+" "+str(action.parameters[1]) == "closedrawer drawer":
+			elif  str(action.name)+" "+str(action.parameters[1]) == "opendrawer drawer":
+				print("!2")
+
 				set_joint_positions(world.robot, world.arm_joints, self.arm_plan_dict[action.name+str(action.parameters[1])])
 				set_joint_positions(world.robot, world.base_joints, self.base_plan_dict[action.name+str(action.parameters[1])])
 				self.drawer("opened")
+			elif  str(action.name)+" "+str(action.parameters[1]) == "closedrawer drawer":
+				print("!2b")
 
-			elif  str(action.name)+" "+str(action.parameters[1]) == "pickuptop sugar":
 				set_joint_positions(world.robot, world.arm_joints, self.arm_plan_dict[action.name+str(action.parameters[1])])
+				set_joint_positions(world.robot, world.base_joints, self.base_plan_dict[action.name+str(action.parameters[1])])
+				self.drawer("closed")
+			elif  str(action.name)+" "+str(action.parameters[1]) == "pickuptop sugar":
+				print("3!")
+
+				# set_joint_positions(world.robot, world.arm_joints, self.arm_plan_dict[action.name+str(action.parameters[1])])
 				set_joint_positions(world.robot, world.base_joints, self.base_plan_dict[action.name+str(action.parameters[1])])
 				self.sugar_move()
 
 			elif  str(action.name)+" "+str(action.parameters[1]) == "pickuptop spam":
+				print("4!")
+
 				self.arm_plan_dict[action.name+str(action.parameters[1])] = object_postion_dict["spam"]
 				self.base_plan_dict[action.name+str(action.parameters[1])] = base_position_list["counter"]
 				self.spam_move()
 
 
 			elif  str(action.name)+" "+str(action.parameters[1]) == "droptop sugar":
+				print("5!")
+
 				self.arm_plan_dict[action.name+str(action.parameters[1])] = object_postion_dict["spam"]
 				self.base_plan_dict[action.name+str(action.parameters[1])] = base_position_list["counter"]
 
 			elif  str(action.name)+" "+str(action.parameters[1]) == "dropdrawer spam":
+				print("6!")
+
 				self.arm_plan_dict[action.name+str(action.parameters[1])] = object_postion_dict["spam"]
 				self.base_plan_dict[action.name+str(action.parameters[1])] = base_position_list["drawer"]
 				self.drawer("closed")
+			elif  str(action.name)+" "+str(action.parameters[1]) == "move drawer":
+				print("6!")
 
+				# set_joint_positions(world.robot, world.arm_joints, self.arm_plan_dict[action.name+str(action.parameters[1])])
+				set_joint_positions(world.robot, world.base_joints, self.base_plan_dict[action.name+str(action.parameters[1])])
+				self.counter_move()
 
 			wait_for_user()
 
@@ -345,7 +625,7 @@ object_postion_dict = {"sugar": (-0.1, 1.25, 0, -0.6, 0 ,3.04 , 0.741), \
 						"spam": (0.267, 0.990, -0.497,-0.270, -0.653, -0.270, 0.653)}
 
 
-base_position_list = {"drawer" : (0.7, 0.6, -3.14),\
+base_position_list = {"drawer" : (0.8, 0.5, -3.14),\
 					"counter": (0.8, 0.5, -3.14)}
 
 
@@ -364,6 +644,9 @@ def main(executor):
 	joints = get_movable_joints(world.robot)
 
 	sample_fn = get_sample_fn(world.robot, world.arm_joints)
+
+
+
 
 
 	executor.run()
