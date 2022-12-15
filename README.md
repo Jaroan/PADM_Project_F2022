@@ -1,7 +1,12 @@
-# 16.410 PADM Project Fall 2022
+# 16.413 PADM Project Fall 2022
 
 <!-------------------------------------------------------------------------->
 <i>Jasmine Jerry Aloor and Alissa Chavalithumrong</i>
+## Contents ##
+1. [Introduction](#introduction)
+2. [Part 1: Activity Planning](#section-1-activity-planning)
+3. [Part 2: Motion Planning](#section-2-sample-based-motion-planning)
+4. [Part 3: Trajectory Optimization](#section-3-trajectory-optimization)
 
 ## Introduction
 
